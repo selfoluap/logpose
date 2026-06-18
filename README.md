@@ -5,13 +5,7 @@
 <h1 align="center">logpose</h1>
 
 <p align="center">
-  <strong>The log pose to your next island.</strong>
-</p>
-
-<p align="center">
   A CLI ticket system for tracking projects, ideas, tasks, and dependency graphs.
-  Named after the <a href="https://onepiece.fandom.com/wiki/Log_Pose">Log Pose</a>
-  from One Piece — the compass that points to the next island.
 </p>
 
 <p align="center">
@@ -103,12 +97,6 @@ lg blocked [project]        # Tasks blocked by dependencies
 | 4–5 | `openai/gpt-5.5` (powerful) |
 
 Configurable via `lg config set <level> <model>`.
-
-## Why "logpose"?
-
-In the world of One Piece, the Grand Line is a perilous ocean where normal compasses don't work. Pirates use a **Log Pose** — a special compass that locks onto the magnetic field of the next island, guiding them forward one step at a time.
-
-logpose does the same for your projects: it doesn't show you everything at once, just what's next.
 
 ## License
 

@@ -5,7 +5,7 @@
 <h1 align="center">logpose</h1>
 
 <p align="center">
-  A CLI ticket system for tracking projects, ideas, tasks, and dependency graphs.
+  A CLI wrapper for tracking ideas and tasks, backed by an LLM coding harness.
 </p>
 
 <p align="center">
@@ -97,6 +97,19 @@ lg blocked [project]        # Tasks blocked by dependencies
 | 4–5 | `openai/gpt-5.5` (powerful) |
 
 Configurable via `lg config set <level> <model>`.
+
+## Why?
+
+This project — like most nowadays — is just a wrapper around LLMs. But it works okayish for me right now. I am mainly using Hermes to capture my ideas and tasks and just wanted to have a quick wrapper around what I think is a better coding harness. Right now I mostly use opencode, because I like the plan and build separation and that every model can be used and I find it to be a little better than Hermes itself.
+
+Only extra skill I pull in is [ponytail](https://github.com/DietrichGebert/ponytail).
+
+The tool is very simple and probably not super useful for many people, but it does what it needs to do for me.
+
+## Dependencies
+
+- [opencode](https://github.com/anomalyco/opencode) — plan and build agents
+- [ponytail](https://github.com/DietrichGebert/ponytail) — additional skill
 
 ## License
 

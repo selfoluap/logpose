@@ -1,11 +1,11 @@
-"""SQLite database layer for hermes-tix ticket system."""
+"""SQLite database layer for logpose ticket system."""
 
 import sqlite3
 import os
 import time
 from pathlib import Path
 
-DEFAULT_DB_DIR = os.path.expanduser("~/.hermes-tix")
+DEFAULT_DB_DIR = os.path.expanduser("~/.logpose")
 DEFAULT_DB_PATH = os.path.join(DEFAULT_DB_DIR, "tix.db")
 
 SCHEMA = """

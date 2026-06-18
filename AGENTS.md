@@ -1,28 +1,67 @@
-# hermes-tix Agent Guide
+# logpose Agent Guide
 
-hermes-tix is a CLI ticket system for Hermes Agent. It tracks projects, ideas, tasks, and task dependency graphs. Hermes uses it to manage work across multiple codebases.
+logpose is a CLI ticket system — the log pose to your next island. It tracks projects, ideas, tasks, and task dependency graphs. Named after the Log Pose from One Piece, the compass that points to the next island.
 
 ## Architecture
 
 ```
-hermes-tix/
-  tix                    # Shell entry point
-  hermes_tix/
+logpose/
+  lg                     # Shell entry point
+  logpose/
     __init__.py
     cli.py               # argparse CLI — all commands
-    config.py             # Model mapping config (~/.hermes-tix/config.json)
+    config.py             # Model mapping config (~/.logpose/config.json)
     db.py                 # SQLite schema, CRUD operations
     graph.py              # ASCII and DOT dependency graph rendering
     opencode.py           # OpenCode integration (plan + build)
   pyproject.toml
 ```
 
-Data stored at `~/.hermes-tix/`:
-- `tix.db` — SQLite database
+Data stored at `~/.logpose/`:
+- `tix.db` — SQLite database (legacy name)
 - `config.json` — model mapping by complexity
 - `logs/` — build log files (centralized, one per task)
 
-## Key Concepts
+## CLI Reference
+
+```
+lg init                           Initialize database
+lg status                         Show stats across all projects
+
+lg project add <name> <path>      Register a project (auto-detects AGENTS.md)
+lg project list                   List all projects
+lg project show <name>            Show project with its ideas and tasks
+lg project rm <name>              Remove project and all its ideas/tasks
+
+lg idea add <project> <title> [-d desc] [-c 1-5]   Add an idea
+lg idea list [project] [-s status]                   List ideas
+lg idea show <id>                                    Show idea details
+lg idea refine <id> [-d refined_desc] [-c 1-5]      Mark idea as refined
+lg idea convert <id>                                  Convert idea → task
+lg idea rm <id>                                      Remove an idea
+
+lg task add <project> <title> [-d desc] [-c 1-5]   Add a task
+lg task list [project] [-s status]                   List tasks
+lg task show <id>                                    Show task with dependencies + log path
+lg task plan <id>                                    Run opencode plan agent
+lg task build <id> [--force]                          Run opencode build agent
+lg task watch <id>                                    Tail the build log in real-time
+lg task status <id> <status>                          Update task status
+lg task deps <id> [dep_id...]                         Set dependencies
+lg task undep <id> <dep_id>                           Remove a dependency
+lg task rm <id>                                      Remove a task
+
+lg config show                     Show complexity → model mapping
+lg config set <1-5> <model>        Set model for a complexity level
+lg config reset                    Reset to default model mapping
+
+lg graph [project]                ASCII dependency graph
+lg graph [project] -f dot         DOT format (for Graphviz)
+lg next [project]                 Show ready-to-build tasks
+lg blocked [project]              Show blocked tasks (deps not done)
+```
+
+## Key Concepts (same as original hermes-tix)
 
 - **Projects** — codebases with a directory path and optional AGENTS.md
 - **Ideas** — unrefined features/bugs/chores. Status: new → refined → converted
@@ -33,8 +72,6 @@ Data stored at `~/.hermes-tix/`:
 
 ## Complexity → Model Mapping
 
-Default mapping (configurable via `tix config`):
-
 | Complexity | Model |
 |---|---|
 | 1 | deepseek/deepseek-v4-flash |
@@ -43,85 +80,13 @@ Default mapping (configurable via `tix config`):
 | 4 | openai/gpt-5.5 |
 | 5 | openai/gpt-5.5 |
 
-- Low (1-2): fast, cheap models for routine changes
-- Medium (3): balanced cost/quality
-- High (4-5): powerful models for architectural decisions
-
-When a task has no complexity set, it defaults to complexity 3 (glm-5.1).
-
-## CLI Reference
-
-```
-tix init                           Initialize database
-tix status                         Show stats across all projects
-
-tix project add <name> <path>      Register a project (auto-detects AGENTS.md)
-tix project list                   List all projects
-tix project show <name>            Show project with its ideas and tasks
-tix project rm <name>              Remove project and all its ideas/tasks
-
-tix idea add <project> <title> [-d desc] [-c 1-5]   Add an idea
-tix idea list [project] [-s status]                   List ideas
-tix idea show <id>                                    Show idea details
-tix idea refine <id> [-d refined_desc] [-c 1-5]      Mark idea as refined
-tix idea convert <id>                                  Convert idea → task
-tix idea rm <id>                                      Remove an idea
-
-tix task add <project> <title> [-d desc] [-c 1-5]   Add a task
-tix task list [project] [-s status]                   List tasks
-tix task show <id>                                    Show task with dependencies + log path
-tix task plan <id>                                    Run opencode plan agent
-tix task build <id> [--force]                          Run opencode build agent
-tix task watch <id>                                    Tail the build log in real-time
-tix task status <id> <status>                          Update task status
-tix task deps <id> [dep_id...]                         Set dependencies
-tix task undep <id> <dep_id>                           Remove a dependency
-tix task rm <id>                                      Remove a task
-
-tix config show                     Show complexity → model mapping
-tix config set <1-5> <model>        Set model for a complexity level
-tix config reset                    Reset to default model mapping
-
-tix graph [project]                ASCII dependency graph
-tix graph [project] -f dot         DOT format (for Graphviz)
-tix next [project]                 Show ready-to-build tasks
-tix blocked [project]              Show blocked tasks (deps not done)
-```
+Default when not set: complexity 3 (glm-5.1).
 
 ## Hermes Integration Pattern
 
-1. **Capture idea**: User mentions an idea → `tix idea add <project> "<title>" -d "<description>" -c <1-5>`
-2. **Refine idea**: Hermes polishes the description → `tix idea refine <id> -d "<refined>" -c <1-5>`
-3. **Convert to task**: `tix idea convert <id>` — copies complexity from idea to task
-4. **Plan**: `tix task plan <id>` — spawns opencode /plan with model based on complexity
-5. **Build**: `tix task build <id>` — spawns opencode build with model, logs to `~/.hermes-tix/logs/`
-6. **Watch**: `tix task watch <id>` — tails the build log in real-time
-7. **Mark done**: `tix task status <id> done`
-
-## Important Conventions
-
-- Projects should be registered before ideas/tasks are added
-- Dependencies are checked before build — blocked tasks won't build unless --force
-- OpenCode is spawned via subprocess in the project directory
-- Plans are saved to `<project>/plans/task-<id>-<title>.md`
-- Build logs are centralized at `~/.hermes-tix/logs/task-<id>-<slug>.log`
-- All data is SQLite + JSON config, no external services needed
-- The CLI is pure stdlib Python — no dependencies beyond Python 3.10+
-- Complexity determines which model opencode uses (1-2=fast, 3=balanced, 4-5=powerful)
-- Idea complexity is copied to the task when converting
-
-## OpenCode Integration
-
-When `tix task plan <id>` or `tix task build <id>` is called:
-1. Reads the task's complexity from the DB
-2. Resolves the model from `~/.hermes-tix/config.json` via complexity
-3. Passes `--model <model>` to opencode
-4. For build: tees output to `~/.hermes-tix/logs/task-<id>-<slug>.log`
-5. Status is updated automatically based on exit code
-
-## Adding opencode (if missing)
-
-```bash
-npm i -g opencode-ai@latest
-# or: brew install anomalyco/tap/opencode
-```
+1. **Capture idea**: User mentions an idea → `lg idea add <project> "<title>" -d "<description>" -c <1-5>`
+2. **Refine idea**: `lg idea refine <id> -d "<refined>" -c <1-5>`
+3. **Convert to task**: `lg idea convert <id>`
+4. **Plan**: `lg task plan <id>` → spawns opencode /plan
+5. **Build**: `lg task build <id>` → spawns opencode build
+6. **Mark done**: `lg task status <id> done`

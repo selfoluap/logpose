@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
-name = "hermes-tix"
+name = "logpose"
 version = "0.1.0"
-description = "In-house ticket system for Hermes Agent — track projects, ideas, tasks, and dependency graphs."
+description = "Track projects, ideas, and tasks — the log pose to your next island."
 requires-python = ">=3.10"
 license = {text = "MIT"}
 
 [project.scripts]
-tix = "hermes_tix.cli:main"
+lg = "logpose.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["hermes_tix*"]
+include = ["logpose*"]

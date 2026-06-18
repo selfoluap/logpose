@@ -1,4 +1,4 @@
-"""Dependency graph rendering for hermes-tix."""
+"""Dependency graph rendering for logpose."""
 
 
 def _render_single_project(conn, project_id, project_name=None):

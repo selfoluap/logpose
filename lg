@@ -1,0 +1,4 @@
+#!/bin/bash
+# logpose entry point — the log pose to your next island
+LOGPOSE_DIR="$HOME/logpose"
+exec env PYTHONPATH="$LOGPOSE_DIR:$PYTHONPATH" python3 -m logpose.cli "$@"

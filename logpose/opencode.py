@@ -1,4 +1,4 @@
-"""OpenCode integration for hermes-tix — spawn plan and build processes."""
+"""OpenCode integration for logpose — spawn plan and build processes."""
 
 import os
 import subprocess
@@ -99,7 +99,7 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
 
     # Generate log path in centralized location if not provided
     if log_path is None:
-        log_dir = os.path.join(os.path.expanduser("~/.hermes-tix"), "logs")
+        log_dir = os.path.join(os.path.expanduser("~/.logpose"), "logs")
         os.makedirs(log_dir, exist_ok=True)
         slug = _slugify(task_title)
         log_path = os.path.join(log_dir, f"task-{task_id}-{slug}.log")

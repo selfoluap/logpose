@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hermes-tix CLI."""
+"""logpose CLI — the log pose to your next island."""
 
 import argparse
 import os
@@ -591,7 +591,7 @@ def _would_cycle(conn, task_id, dep_ids):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="hermes-tix — In-house ticket system for tracking projects, ideas, and tasks.",
+        description="logpose — Track projects, ideas, and tasks. The log pose to your next island.",
     )
     sub = parser.add_subparsers(dest="command", help="Available commands")
 

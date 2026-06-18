@@ -1,4 +1,0 @@
-#!/bin/bash
-# hermes-tix entry point
-HERMES_TIX_DIR="$HOME/hermes-tix"
-exec env PYTHONPATH="$HERMES_TIX_DIR:$PYTHONPATH" python3 -m hermes_tix.cli "$@"

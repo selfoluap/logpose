@@ -1,9 +1,9 @@
-"""Configuration management for hermes-tix — model mapping by complexity."""
+"""Configuration management for logpose — model mapping by complexity."""
 
 import json
 import os
 
-CONFIG_DIR = os.path.expanduser("~/.hermes-tix")
+CONFIG_DIR = os.path.expanduser("~/.logpose")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
 DEFAULT_CONFIG = {

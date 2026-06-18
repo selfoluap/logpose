@@ -5,7 +5,7 @@ import argparse
 import os
 import sys
 
-from hermes_tix.db import (
+from logpose.db import (
     get_db,
     project_add, project_get, project_list, project_delete,
     idea_add, idea_get, idea_list, idea_update, idea_delete,
@@ -13,8 +13,8 @@ from hermes_tix.db import (
     task_add_dep, task_remove_dep, task_get_deps, task_get_dependents,
     task_get_blocked, task_get_ready, get_stats,
 )
-from hermes_tix.graph import render_graph, render_graph_dot
-from hermes_tix.config import load_config, save_config, get_model_for_complexity
+from logpose.graph import render_graph, render_graph_dot
+from logpose.config import load_config, save_config, get_model_for_complexity
 
 
 def _resolve_project(conn, name_or_id):
@@ -278,7 +278,7 @@ def cmd_task_plan(args):
     model = get_model_for_complexity(task["complexity"])
     print(f"[tix] Model: {model} (complexity: {task['complexity'] or 'default'})")
 
-    from hermes_tix.opencode import run_plan
+    from logpose.opencode import run_plan
     plan_path = run_plan(
         task_id=task["id"],
         task_title=task["title"],
@@ -318,7 +318,7 @@ def cmd_task_build(args):
     task_update(conn, args.id, status="in_progress")
     print(f"Task #{args.id} status: {task['status']} → in_progress")
 
-    from hermes_tix.opencode import run_build
+    from logpose.opencode import run_build
     exit_code, log_path = run_build(
         task_id=task["id"],
         task_title=task["title"],
@@ -543,7 +543,7 @@ def cmd_config_set(args):
 
 def cmd_config_reset(args):
     """Reset model mapping to defaults."""
-    from hermes_tix.config import DEFAULT_CONFIG
+    from logpose.config import DEFAULT_CONFIG
     import copy
     save_config(copy.deepcopy(DEFAULT_CONFIG))
     print("Config reset to defaults.")

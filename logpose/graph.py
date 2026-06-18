@@ -6,7 +6,7 @@ def _render_single_project(conn, project_id, project_name=None):
 
     Returns a string suitable for terminal display.
     """
-    from hermes_tix.db import task_list, task_all_deps
+    from logpose.db import task_list, task_all_deps
 
     tasks = task_list(conn, project_id=project_id)
     deps = task_all_deps(conn, project_id=project_id)
@@ -90,7 +90,7 @@ def render_graph(conn, project_id=None):
     When project_id is None, renders a separate graph for each project
     that has tasks, with project-name headers.
     """
-    from hermes_tix.db import task_list
+    from logpose.db import task_list
 
     if project_id is not None:
         tasks = task_list(conn, project_id=project_id)
@@ -127,7 +127,7 @@ def render_graph_dot(conn, project_id=None):
 
     Returns a string that can be piped to `dot -Tsvg` or similar.
     """
-    from hermes_tix.db import task_list, task_all_deps
+    from logpose.db import task_list, task_all_deps
 
     tasks = task_list(conn, project_id=project_id)
     deps = task_all_deps(conn, project_id=project_id)

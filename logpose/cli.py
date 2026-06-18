@@ -14,7 +14,7 @@ from logpose.db import (
     task_get_blocked, task_get_ready, get_stats,
 )
 from logpose.graph import render_graph, render_graph_dot
-from logpose.config import load_config, save_config, get_model_for_complexity
+from logpose.config import load_config, save_config, get_model_for_complexity, get_model_for_role, reset_config
 
 
 def _resolve_project(conn, name_or_id):
@@ -61,7 +61,6 @@ def cmd_status(args):
     print(f"  blocked:      {stats['tasks_blocked']}")
     conn.close()
 
-
 # ─── Project commands ────────────────────────────────────────────────────────
 
 def cmd_project_add(args):
@@ -80,7 +79,6 @@ def cmd_project_add(args):
         print(f"  AGENTS.md: {agents_md}")
     conn.close()
 
-
 def cmd_project_list(args):
     conn = get_db()
     for p in project_list(conn):
@@ -89,7 +87,6 @@ def cmd_project_list(args):
         print(f"  #{p['id']} {p['name']}  ({task_count} tasks, {idea_count} ideas)")
         print(f"       path: {p['path']}")
     conn.close()
-
 
 def cmd_project_show(args):
     conn = get_db()
@@ -107,14 +104,12 @@ def cmd_project_show(args):
             print(f"    #{t['id']} [{t['status']}] {t['title']}")
     conn.close()
 
-
 def cmd_project_rm(args):
     conn = get_db()
     proj = _resolve_project(conn, args.name)
     project_delete(conn, proj["id"])
     print(f"Project '{proj['name']}' and all its ideas/tasks removed.")
     conn.close()
-
 
 # ─── Idea commands ───────────────────────────────────────────────────────────
 
@@ -178,6 +173,35 @@ def cmd_idea_refine(args):
     conn.close()
 
 
+def cmd_idea_refine_ai(args):
+    """Use opencode to refine an idea into a well-structured specification."""
+    conn = get_db()
+    idea = idea_get(conn, args.id)
+    if not idea:
+        print(f"Idea #{args.id} not found.")
+        sys.exit(1)
+
+    proj = project_get(conn, idea["project_id"])
+    model = get_model_for_role("refine")
+    print(f"[logpose] Model: {model} (role: refine)")
+
+    from logpose.opencode import run_refine
+    refined = run_refine(
+        idea_id=idea["id"],
+        idea_title=idea["title"],
+        idea_description=idea["description"] or idea["title"],
+        project_path=proj["path"],
+        model=model,
+    )
+
+    if refined:
+        idea_update(conn, args.id, status="refined", refined_description=refined)
+        print(f"\nIdea #{args.id} '{idea['title']}' refined and marked as refined.")
+    else:
+        print(f"\nRefinement failed for idea #{args.id}. Status unchanged.")
+    conn.close()
+
+
 def cmd_idea_convert(args):
     """Convert an idea into a task."""
     conn = get_db()
@@ -208,7 +232,6 @@ def cmd_idea_rm(args):
     else:
         print(f"Idea #{args.id} not found.")
     conn.close()
-
 
 # ─── Task commands ───────────────────────────────────────────────────────────
 
@@ -267,7 +290,7 @@ def cmd_task_show(args):
 
 
 def cmd_task_plan(args):
-    """Run opencode /plan for this task."""
+    """Run opencode plan agent for this task. Uses the 'plan' role model."""
     conn = get_db()
     task = task_get(conn, args.id)
     if not task:
@@ -275,8 +298,8 @@ def cmd_task_plan(args):
         sys.exit(1)
 
     proj = project_get(conn, task["project_id"])
-    model = get_model_for_complexity(task["complexity"])
-    print(f"[tix] Model: {model} (complexity: {task['complexity'] or 'default'})")
+    model = get_model_for_role("plan")
+    print(f"[logpose] Model: {model} (role: plan)")
 
     from logpose.opencode import run_plan
     plan_path = run_plan(
@@ -287,13 +310,16 @@ def cmd_task_plan(args):
         model=model,
     )
 
-    task_update(conn, args.id, plan_md_path=plan_path, status="planned")
-    print(f"Task #{args.id} status: pending → planned")
+    if plan_path:
+        task_update(conn, args.id, plan_md_path=plan_path, status="planned")
+        print(f"Task #{args.id} status: {task['status']} → planned")
+    else:
+        print(f"Task #{args.id} planning failed — no output from opencode.")
     conn.close()
 
 
 def cmd_task_build(args):
-    """Run opencode build for this task."""
+    """Run opencode build for this task. Uses complexity-based model selection."""
     conn = get_db()
     task = task_get(conn, args.id)
     if not task:
@@ -313,7 +339,7 @@ def cmd_task_build(args):
     proj = project_get(conn, task["project_id"])
 
     model = get_model_for_complexity(task["complexity"])
-    print(f"[tix] Model: {model} (complexity: {task['complexity'] or 'default'})")
+    print(f"[logpose] Model: {model} (complexity: {task['complexity'] or 'default(3)'})")
 
     task_update(conn, args.id, status="in_progress")
     print(f"Task #{args.id} status: {task['status']} → in_progress")
@@ -338,6 +364,35 @@ def cmd_task_build(args):
     else:
         task_update(conn, args.id, status="blocked")
         print(f"Task #{args.id} status: in_progress → blocked (build failed)")
+    conn.close()
+
+
+def cmd_task_review(args):
+    """Run opencode review agent for this task. Uses the 'review' role model."""
+    conn = get_db()
+    task = task_get(conn, args.id)
+    if not task:
+        print(f"Task #{args.id} not found.")
+        sys.exit(1)
+
+    proj = project_get(conn, task["project_id"])
+    model = get_model_for_role("review")
+    print(f"[logpose] Model: {model} (role: review)")
+
+    from logpose.opencode import run_review
+    review_path = run_review(
+        task_id=task["id"],
+        task_title=task["title"],
+        task_description=task["description"] or task["title"],
+        project_path=proj["path"],
+        plan_md_path=task["plan_md_path"],
+        model=model,
+    )
+
+    if review_path:
+        print(f"Review log: {review_path}")
+    else:
+        print(f"Review failed for task #{args.id}.")
     conn.close()
 
 
@@ -386,7 +441,6 @@ def cmd_task_deps(args):
     # Add new deps
     for did in dep_ids:
         task_add_dep(conn, task["id"], did)
-
     conn.commit()
     print(f"Task #{args.id} now depends on: {[f'#{d}' for d in dep_ids] if dep_ids else '(none)'}")
     conn.close()
@@ -516,29 +570,41 @@ def cmd_blocked(args):
         print(f"       blocked by: {dep_str}")
     conn.close()
 
-
 # ─── Config commands ────────────────────────────────────────────────────────
 
 def cmd_config_show(args):
     """Show current model mapping configuration."""
     config = load_config()
     models = config.get("models", {})
-    print("Complexity → Model mapping:")
+
+    print("Pipeline role → Model mapping:")
+    print(f"  refine:  {models.get('refine', '(not set)')}")
+    print(f"  plan:    {models.get('plan', '(not set)')}")
+    print(f"  review:  {models.get('review', '(not set)')}")
+    print()
+    print("Complexity → Build model mapping:")
     for level in range(1, 6):
         model = models.get(str(level), "(not set)")
         print(f"  {level}: {model}")
 
 
 def cmd_config_set(args):
-    """Set the model for a complexity level."""
-    if args.level < 1 or args.level > 5:
-        print("Complexity level must be 1-5.")
-        sys.exit(1)
+    """Set the model for a complexity level or pipeline role."""
     config = load_config()
     config.setdefault("models", {})
-    config["models"][str(args.level)] = args.model
-    save_config(config)
-    print(f"Set complexity {args.level} → {args.model}")
+
+    # Check if key is a role (refine, plan, review) or a complexity level (1-5)
+    if args.key in ("refine", "plan", "review"):
+        config["models"][args.key] = args.model
+        save_config(config)
+        print(f"Set role '{args.key}' → {args.model}")
+    elif args.key.isdigit() and 1 <= int(args.key) <= 5:
+        config["models"][args.key] = args.model
+        save_config(config)
+        print(f"Set complexity {args.key} → {args.model}")
+    else:
+        print(f"Invalid key '{args.key}'. Use a complexity level (1-5) or a role (refine, plan, review).")
+        sys.exit(1)
 
 
 def cmd_config_reset(args):
@@ -547,7 +613,6 @@ def cmd_config_reset(args):
     import copy
     save_config(copy.deepcopy(DEFAULT_CONFIG))
     print("Config reset to defaults.")
-
 
 # ─── Utility ─────────────────────────────────────────────────────────────────
 
@@ -585,7 +650,6 @@ def _would_cycle(conn, task_id, dep_ids):
         if can_reach(task_id, did):
             return True
     return False
-
 
 # ─── Main CLI ────────────────────────────────────────────────────────────────
 
@@ -630,11 +694,14 @@ def main():
     is_ = isub.add_parser("show", help="Show idea details")
     is_.add_argument("id", type=int)
     is_.set_defaults(func=cmd_idea_show)
-    ir = isub.add_parser("refine", help="Mark idea as refined")
+    ir = isub.add_parser("refine", help="Mark idea as refined (manual)")
     ir.add_argument("id", type=int)
     ir.add_argument("-d", "--description", default=None, help="Refined description")
     ir.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Complexity score (1-5)")
     ir.set_defaults(func=cmd_idea_refine)
+    ira = isub.add_parser("refine-ai", help="Refine idea using opencode (AI)")
+    ira.add_argument("id", type=int)
+    ira.set_defaults(func=cmd_idea_refine_ai)
     ic = isub.add_parser("convert", help="Convert idea to task")
     ic.add_argument("id", type=int)
     ic.set_defaults(func=cmd_idea_convert)
@@ -658,13 +725,16 @@ def main():
     ts = tsub.add_parser("show", help="Show task details")
     ts.add_argument("id", type=int)
     ts.set_defaults(func=cmd_task_show)
-    tp = tsub.add_parser("plan", help="Run opencode /plan for this task")
+    tp = tsub.add_parser("plan", help="Run opencode plan agent for this task")
     tp.add_argument("id", type=int)
     tp.set_defaults(func=cmd_task_plan)
     tb = tsub.add_parser("build", help="Run opencode build for this task")
     tb.add_argument("id", type=int)
     tb.add_argument("--force", action="store_true", help="Build even if deps aren't done")
     tb.set_defaults(func=cmd_task_build)
+    trv = tsub.add_parser("review", help="Run opencode review agent for this task")
+    trv.add_argument("id", type=int)
+    trv.set_defaults(func=cmd_task_review)
     tst = tsub.add_parser("status", help="Update task status")
     tst.add_argument("id", type=int)
     tst.add_argument("status")
@@ -689,8 +759,8 @@ def main():
     csub = p_config.add_subparsers(dest="subcommand")
     cs = csub.add_parser("show", help="Show current model mapping")
     cs.set_defaults(func=cmd_config_show)
-    cset = csub.add_parser("set", help="Set model for a complexity level")
-    cset.add_argument("level", type=int, help="Complexity level (1-5)")
+    cset = csub.add_parser("set", help="Set model for a complexity level or pipeline role")
+    cset.add_argument("key", help="Complexity level (1-5) or role (refine, plan, review)")
     cset.add_argument("model", help="Model string (e.g. openai/gpt-5.5)")
     cset.set_defaults(func=cmd_config_set)
     creset = csub.add_parser("reset", help="Reset to default model mapping")

@@ -29,7 +29,7 @@ def _check_opencode():
     return binary
 
 
-def run_plan(task_id, task_title, task_description, project_path, plan_output_dir=None):
+def run_plan(task_id, task_title, task_description, project_path, plan_output_dir=None, model=None):
     """Run opencode plan agent for a task.
 
     Captures opencode's stdout, saves it as the plan markdown file.
@@ -55,8 +55,12 @@ def run_plan(task_id, task_title, task_description, project_path, plan_output_di
     print(f"[tix] Running opencode plan for task #{task_id}...")
     print(f"[tix] Project: {project_path}")
 
+    cmd = [binary, "run", "--agent", "plan", prompt]
+    if model:
+        cmd.extend(["-m", model])
+
     result = subprocess.run(
-        [binary, "run", "--agent", "plan", prompt],
+        cmd,
         cwd=project_path,
         capture_output=True,
         text=True,
@@ -84,7 +88,7 @@ def run_plan(task_id, task_title, task_description, project_path, plan_output_di
     return plan_path
 
 
-def run_build(task_id, task_title, task_description, project_path, plan_md_path=None, log_path=None):
+def run_build(task_id, task_title, task_description, project_path, plan_md_path=None, log_path=None, model=None):
     """Run opencode build for a task.
 
     Spawns `opencode run '...' -f plan.md` in the project directory.
@@ -93,9 +97,9 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
     """
     binary = _check_opencode()
 
-    # Generate log path if not provided
+    # Generate log path in centralized location if not provided
     if log_path is None:
-        log_dir = os.path.join(project_path, "logs")
+        log_dir = os.path.join(os.path.expanduser("~/.hermes-tix"), "logs")
         os.makedirs(log_dir, exist_ok=True)
         slug = _slugify(task_title)
         log_path = os.path.join(log_dir, f"task-{task_id}-{slug}.log")
@@ -118,6 +122,8 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
     if plan_md_path and os.path.isfile(plan_md_path):
         cmd.extend(["-f", plan_md_path])
         print(f"[tix] Attaching plan: {plan_md_path}")
+    if model:
+        cmd.extend(["-m", model])
 
     print(f"[tix] Running opencode build for task #{task_id}...")
     print(f"[tix] Project: {project_path}")

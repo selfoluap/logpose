@@ -14,6 +14,7 @@ from hermes_tix.db import (
     task_get_blocked, task_get_ready, get_stats,
 )
 from hermes_tix.graph import render_graph, render_graph_dot
+from hermes_tix.config import load_config, save_config, get_model_for_complexity
 
 
 def _resolve_project(conn, name_or_id):
@@ -123,8 +124,9 @@ def cmd_idea_add(args):
     desc = args.description
     if desc is None and not sys.stdin.isatty():
         desc = sys.stdin.read().strip()
-    idea = idea_add(conn, proj["id"], args.title, description=desc)
-    print(f"Idea #{idea['id']} '{idea['title']}' added to project '{proj['name']}'")
+    idea = idea_add(conn, proj["id"], args.title, description=desc, complexity=args.complexity)
+    complexity_str = f" (complexity: {args.complexity})" if args.complexity else ""
+    print(f"Idea #{idea['id']} '{idea['title']}' added to project '{proj['name']}'{complexity_str}")
     conn.close()
 
 
@@ -138,8 +140,9 @@ def cmd_idea_list(args):
     if not ideas:
         print("(no ideas)")
     for i in ideas:
+        complexity_str = f" C:{i['complexity']}" if i["complexity"] else ""
         desc_preview = (i["description"] or "")[:80]
-        print(f"  #{i['id']} [{i['status']}] {i['title']}  ({i['project_name']})")
+        print(f"  #{i['id']} [{i['status']}] {i['title']}  ({i['project_name']}){complexity_str}")
         if desc_preview:
             print(f"       {desc_preview}")
     conn.close()
@@ -148,7 +151,7 @@ def cmd_idea_list(args):
 def cmd_idea_show(args):
     conn = get_db()
     idea = idea_get(conn, args.id)
-    _print_row(idea, ["id", "project_id", "title", "description", "refined_description", "status", "created_at"])
+    _print_row(idea, ["id", "project_id", "title", "description", "refined_description", "complexity", "status", "created_at"])
     if idea and idea["refined_description"]:
         print(f"\n  refined_description:\n{idea['refined_description']}")
     conn.close()
@@ -165,8 +168,13 @@ def cmd_idea_refine(args):
     desc = args.description
     if desc is None and not sys.stdin.isatty():
         desc = sys.stdin.read().strip()
-    idea_update(conn, args.id, status="refined", refined_description=desc)
+    updates = {"status": "refined", "refined_description": desc}
+    if args.complexity is not None:
+        updates["complexity"] = args.complexity
+    idea_update(conn, args.id, **updates)
     print(f"Idea #{args.id} '{idea['title']}' marked as refined.")
+    if args.complexity is not None:
+        print(f"  complexity: {args.complexity}")
     conn.close()
 
 
@@ -182,9 +190,13 @@ def cmd_idea_convert(args):
         sys.exit(1)
 
     desc = idea["refined_description"] or idea["description"] or ""
-    task = task_add(conn, idea["project_id"], idea["title"], description=desc, idea_id=idea["id"])
+    complexity = idea["complexity"]
+    task = task_add(conn, idea["project_id"], idea["title"], description=desc, idea_id=idea["id"], complexity=complexity)
     idea_update(conn, args.id, status="converted")
-    print(f"Idea #{args.id} '{idea['title']}' → Task #{task['id']}")
+    msg = f"Idea #{args.id} '{idea['title']}' → Task #{task['id']}"
+    if complexity:
+        msg += f" (complexity: {complexity})"
+    print(msg)
     conn.close()
 
 
@@ -206,8 +218,9 @@ def cmd_task_add(args):
     desc = args.description
     if desc is None and not sys.stdin.isatty():
         desc = sys.stdin.read().strip()
-    task = task_add(conn, proj["id"], args.title, description=desc)
-    print(f"Task #{task['id']} '{task['title']}' added to project '{proj['name']}'")
+    task = task_add(conn, proj["id"], args.title, description=desc, complexity=args.complexity)
+    complexity_str = f" (complexity: {args.complexity})" if args.complexity else ""
+    print(f"Task #{task['id']} '{task['title']}' added to project '{proj['name']}'{complexity_str}")
     conn.close()
 
 
@@ -226,7 +239,8 @@ def cmd_task_list(args):
         if deps:
             dep_ids = [f"#{d['id']}" for d in deps]
             dep_str = f"  ← deps: {', '.join(dep_ids)}"
-        print(f"  #{t['id']} [{t['status']}] {t['title']}  ({t['project_name']}){dep_str}")
+        complexity_str = f" C:{t['complexity']}" if t["complexity"] else ""
+        print(f"  #{t['id']} [{t['status']}] {t['title']}  ({t['project_name']}){complexity_str}{dep_str}")
     conn.close()
 
 
@@ -236,7 +250,7 @@ def cmd_task_show(args):
     if not task:
         print(f"Task #{args.id} not found.")
         sys.exit(1)
-    _print_row(task, ["id", "project_id", "idea_id", "title", "description", "plan_md_path", "status", "created_at", "updated_at"])
+    _print_row(task, ["id", "project_id", "idea_id", "title", "description", "complexity", "plan_md_path", "log_path", "status", "created_at", "updated_at"])
 
     deps = task_get_deps(conn, args.id)
     if deps:
@@ -261,6 +275,8 @@ def cmd_task_plan(args):
         sys.exit(1)
 
     proj = project_get(conn, task["project_id"])
+    model = get_model_for_complexity(task["complexity"])
+    print(f"[tix] Model: {model} (complexity: {task['complexity'] or 'default'})")
 
     from hermes_tix.opencode import run_plan
     plan_path = run_plan(
@@ -268,6 +284,7 @@ def cmd_task_plan(args):
         task_title=task["title"],
         task_description=task["description"] or task["title"],
         project_path=proj["path"],
+        model=model,
     )
 
     task_update(conn, args.id, plan_md_path=plan_path, status="planned")
@@ -295,6 +312,9 @@ def cmd_task_build(args):
 
     proj = project_get(conn, task["project_id"])
 
+    model = get_model_for_complexity(task["complexity"])
+    print(f"[tix] Model: {model} (complexity: {task['complexity'] or 'default'})")
+
     task_update(conn, args.id, status="in_progress")
     print(f"Task #{args.id} status: {task['status']} → in_progress")
 
@@ -305,6 +325,7 @@ def cmd_task_build(args):
         task_description=task["description"] or task["title"],
         project_path=proj["path"],
         plan_md_path=task["plan_md_path"],
+        model=model,
     )
 
     # Save the log path to the task record
@@ -496,6 +517,38 @@ def cmd_blocked(args):
     conn.close()
 
 
+# ─── Config commands ────────────────────────────────────────────────────────
+
+def cmd_config_show(args):
+    """Show current model mapping configuration."""
+    config = load_config()
+    models = config.get("models", {})
+    print("Complexity → Model mapping:")
+    for level in range(1, 6):
+        model = models.get(str(level), "(not set)")
+        print(f"  {level}: {model}")
+
+
+def cmd_config_set(args):
+    """Set the model for a complexity level."""
+    if args.level < 1 or args.level > 5:
+        print("Complexity level must be 1-5.")
+        sys.exit(1)
+    config = load_config()
+    config.setdefault("models", {})
+    config["models"][str(args.level)] = args.model
+    save_config(config)
+    print(f"Set complexity {args.level} → {args.model}")
+
+
+def cmd_config_reset(args):
+    """Reset model mapping to defaults."""
+    from hermes_tix.config import DEFAULT_CONFIG
+    import copy
+    save_config(copy.deepcopy(DEFAULT_CONFIG))
+    print("Config reset to defaults.")
+
+
 # ─── Utility ─────────────────────────────────────────────────────────────────
 
 def _would_cycle(conn, task_id, dep_ids):
@@ -568,6 +621,7 @@ def main():
     ia.add_argument("project")
     ia.add_argument("title")
     ia.add_argument("-d", "--description", default=None)
+    ia.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Complexity score (1-5)")
     ia.set_defaults(func=cmd_idea_add)
     il = isub.add_parser("list", help="List ideas")
     il.add_argument("project", nargs="?", default=None)
@@ -579,6 +633,7 @@ def main():
     ir = isub.add_parser("refine", help="Mark idea as refined")
     ir.add_argument("id", type=int)
     ir.add_argument("-d", "--description", default=None, help="Refined description")
+    ir.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Complexity score (1-5)")
     ir.set_defaults(func=cmd_idea_refine)
     ic = isub.add_parser("convert", help="Convert idea to task")
     ic.add_argument("id", type=int)
@@ -594,6 +649,7 @@ def main():
     ta.add_argument("project")
     ta.add_argument("title")
     ta.add_argument("-d", "--description", default=None)
+    ta.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Complexity score (1-5)")
     ta.set_defaults(func=cmd_task_add)
     tl = tsub.add_parser("list", help="List tasks")
     tl.add_argument("project", nargs="?", default=None)
@@ -627,6 +683,18 @@ def main():
     tw = tsub.add_parser("watch", help="Tail the build log for a task")
     tw.add_argument("id", type=int)
     tw.set_defaults(func=cmd_task_watch)
+
+    # config
+    p_config = sub.add_parser("config", help="Model mapping configuration")
+    csub = p_config.add_subparsers(dest="subcommand")
+    cs = csub.add_parser("show", help="Show current model mapping")
+    cs.set_defaults(func=cmd_config_show)
+    cset = csub.add_parser("set", help="Set model for a complexity level")
+    cset.add_argument("level", type=int, help="Complexity level (1-5)")
+    cset.add_argument("model", help="Model string (e.g. openai/gpt-5.5)")
+    cset.set_defaults(func=cmd_config_set)
+    creset = csub.add_parser("reset", help="Reset to default model mapping")
+    creset.set_defaults(func=cmd_config_reset)
 
     # graph
     p_graph = sub.add_parser("graph", help="Dependency graph")

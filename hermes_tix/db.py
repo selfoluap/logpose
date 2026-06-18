@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS ideas (
     project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     title       TEXT NOT NULL,
     description TEXT,
+    complexity  INTEGER,
     refined_description TEXT,
     status      TEXT NOT NULL DEFAULT 'new',
     created_at  REAL NOT NULL,
@@ -35,6 +36,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     idea_id     INTEGER REFERENCES ideas(id) ON DELETE SET NULL,
     title       TEXT NOT NULL,
     description TEXT,
+    complexity  INTEGER,
     plan_md_path TEXT,
     log_path    TEXT,
     status      TEXT NOT NULL DEFAULT 'pending',
@@ -58,6 +60,8 @@ CREATE INDEX IF NOT EXISTS idx_task_deps_depends ON task_deps(depends_on_id);
 # Migration: add log_path column if it doesn't exist (idempotent)
 _MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN log_path TEXT",
+    "ALTER TABLE ideas ADD COLUMN complexity INTEGER",
+    "ALTER TABLE tasks ADD COLUMN complexity INTEGER",
 ]
 
 
@@ -120,12 +124,12 @@ def project_delete(conn, name_or_id):
 
 # ─── Ideas ───────────────────────────────────────────────────────────────────
 
-def idea_add(conn, project_id, title, description=None):
+def idea_add(conn, project_id, title, description=None, complexity=None):
     """Add a new idea. Returns the idea row."""
     ts = now()
     conn.execute(
-        "INSERT INTO ideas (project_id, title, description, status, created_at, updated_at) VALUES (?, ?, ?, 'new', ?, ?)",
-        (project_id, title, description, ts, ts),
+        "INSERT INTO ideas (project_id, title, description, complexity, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'new', ?, ?)",
+        (project_id, title, description, complexity, ts, ts),
     )
     conn.commit()
     return conn.execute("SELECT * FROM ideas WHERE id = last_insert_rowid()").fetchone()
@@ -152,7 +156,7 @@ def idea_list(conn, project_id=None, status=None):
 
 def idea_update(conn, idea_id, **kwargs):
     """Update idea fields."""
-    allowed = {"title", "description", "refined_description", "status"}
+    allowed = {"title", "description", "complexity", "refined_description", "status"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return idea_get(conn, idea_id)
@@ -175,12 +179,12 @@ def idea_delete(conn, idea_id):
 
 # ─── Tasks ───────────────────────────────────────────────────────────────────
 
-def task_add(conn, project_id, title, description=None, idea_id=None):
+def task_add(conn, project_id, title, description=None, idea_id=None, complexity=None):
     """Add a new task. Returns the task row."""
     ts = now()
     conn.execute(
-        "INSERT INTO tasks (project_id, idea_id, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-        (project_id, idea_id, title, description, ts, ts),
+        "INSERT INTO tasks (project_id, idea_id, title, description, complexity, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
+        (project_id, idea_id, title, description, complexity, ts, ts),
     )
     conn.commit()
     return conn.execute("SELECT * FROM tasks WHERE id = last_insert_rowid()").fetchone()
@@ -207,7 +211,7 @@ def task_list(conn, project_id=None, status=None):
 
 def task_update(conn, task_id, **kwargs):
     """Update task fields."""
-    allowed = {"title", "description", "plan_md_path", "log_path", "status"}
+    allowed = {"title", "description", "complexity", "plan_md_path", "log_path", "status"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return task_get(conn, task_id)

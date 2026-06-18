@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <code>lg</code> · <code>lg idea add</code> · <code>lg task plan</code> · <code>lg graph</code> · <code>lg next</code>
+  <code>lg</code> · <code>lg idea refine-ai</code> · <code>lg task plan</code> · <code>lg task review</code> · <code>lg graph</code>
 </p>
 
 ---
@@ -36,16 +36,39 @@ lg project add tailgraph ~/tailgraph
 # Capture an idea
 lg idea add tailgraph "Add zoom controls" -d "Allow zooming in/out on the node canvas"
 
-# Refine it
-lg idea refine 1 -d "Implement zoom controls for the node canvas" -c 2
+# AI-refine it (uses cheap model to structure the spec)
+lg idea refine-ai 1
 
 # Convert to a task
 lg idea convert 1
 
-# Plan and build
+# Plan (uses strong model to design architecture)
 lg task plan 1
+
+# Build (model selected by complexity)
 lg task build 1
+
+# Review (uses mid-tier model for quality check)
+lg task review 1
 ```
+
+## The Pipeline
+
+```
+IDEA → REFINE-AI → CONVERT → PLAN → BUILD → REVIEW
+        (cheap)              (best)    (varies)  (mid-tier)
+```
+
+**Key insight:** Small models are excellent at following clear plans. Expensive models should be reserved for architecture and design — a great plan from GPT-5.5 enables DeepSeek V4 Flash to implement at 1/100th the cost.
+
+| Stage | Default Model | Purpose |
+|---|---|---|
+| **refine-ai** | DeepSeek V4 Flash | Cheap, structures ideas into specs |
+| **plan** | GPT-5.5 | Best reasoning, reads codebases |
+| **build (C1-3)** | DeepSeek V4 Flash | Follows plans well |
+| **build (C4)** | GPT-5.4 | Complex tasks need stronger reasoning |
+| **build (C5)** | GPT-5.5 | Frontier for the hardest tasks |
+| **review** | DeepSeek V4 Pro | Mid-tier checklist compliance |
 
 ## Usage
 
@@ -54,8 +77,11 @@ lg task build 1
 ```bash
 lg idea add <project> "<title>" -d "<description>" -c <1-5>
 lg idea list [project]
-lg idea refine <id> -d "<description>" -c <1-5>
-lg idea convert <id>        # Convert to a task
+lg idea show <id>
+lg idea refine <id> -d "<description>" -c <1-5>   # Manual refinement
+lg idea refine-ai <id>                              # AI refinement (uses refine model)
+lg idea convert <id>                                # Convert to a task
+lg idea rm <id>
 ```
 
 ### Tasks (track & execute)
@@ -63,12 +89,26 @@ lg idea convert <id>        # Convert to a task
 ```bash
 lg task add <project> "<title>" -d "<description>" -c <1-5>
 lg task list [project]
-lg task show <id>           # Full details + log path
-lg task plan <id>           # Generate an implementation plan
-lg task build <id>          # Execute with opencode
-lg task watch <id>          # Tail the build log
-lg task status <id> done    # Mark as done
-lg task deps <id> <dep_id>  # Set dependencies
+lg task show <id>              # Full details + dependencies
+lg task plan <id>              # Generate plan (uses plan model)
+lg task build <id> [--force]   # Execute with opencode (model by complexity)
+lg task review <id>            # Post-build review (uses review model)
+lg task watch <id>             # Tail the build log
+lg task status <id> <status>   # Update status
+lg task deps <id> [dep_id...] # Set dependencies
+lg task undep <id> <dep_id>   # Remove a dependency
+lg task rm <id>
+```
+
+### Model configuration
+
+```bash
+lg config show                        # Show all pipeline role + complexity mappings
+lg config set refine <model>           # Set refine stage model
+lg config set plan <model>             # Set plan stage model
+lg config set review <model>           # Set review stage model
+lg config set <1-5> <model>           # Set build model for a complexity level
+lg config reset                        # Reset to defaults
 ```
 
 ### Project overview
@@ -76,6 +116,7 @@ lg task deps <id> <dep_id>  # Set dependencies
 ```bash
 lg status                   # Overall stats
 lg graph [project]          # ASCII dependency graph
+lg graph [project] -f dot   # DOT format (Graphviz)
 lg next [project]           # Ready-to-build tasks
 lg blocked [project]        # Tasks blocked by dependencies
 ```
@@ -84,19 +125,31 @@ lg blocked [project]        # Tasks blocked by dependencies
 
 - **Ideas** are raw feature requests or bugs. Status: `new` → `refined` → `converted`
 - **Tasks** are actionable work items. Status: `pending` → `planned` → `in_progress` → `done` (or `blocked`)
-- **Complexity** (1–5) determines which opencode model handles planning and building
+- **Pipeline roles** (refine, plan, review) each use a dedicated model optimized for that stage
+- **Complexity** (1–5) determines which build model handles implementation
 - **Dependencies** enforce execution order (with cycle detection)
 - **Data** is stored in local SQLite at `~/.logpose/` — no servers, no accounts
+- **Build logs** are captured at `~/.logpose/logs/` and linked from the task record
 
-### Complexity → Model Mapping
+### Role-based Model Mapping
 
-| Complexity | Model |
-|---|---|
-| 1–2 | `deepseek/deepseek-v4-flash` (fast, cheap) |
-| 3 (default) | `openai/glm-5.1` (balanced) |
-| 4–5 | `openai/gpt-5.5` (powerful) |
+The pipeline has three dedicated roles, each using the best model for the job:
 
-Configurable via `lg config set <level> <model>`.
+| Role | Default Model | Why |
+|---|---|---|
+| refine | `opencode-go/deepseek-v4-flash` | Cheap, good instruction following — turns ideas into specs |
+| plan | `openai/gpt-5.5` | Best reasoning — reads codebases, designs architecture |
+| review | `opencode-go/deepseek-v4-pro` | Attention to detail — structured checklist review |
+
+### Complexity → Build Model Mapping
+
+| Complexity | Default Model | Use Case |
+|---|---|---|
+| 1 (trivial) | `opencode-go/deepseek-v4-flash` | Config tweaks, one-liners |
+| 2 (simple) | `opencode-go/deepseek-v4-flash` | Small features, bug fixes |
+| 3 (standard) | `opencode-go/deepseek-v4-flash` | With a good plan, cheap suffices |
+| 4 (complex) | `openai/gpt-5.4` | Needs stronger reasoning |
+| 5 (very complex) | `openai/gpt-5.5` | Architecture changes, multi-system |
 
 ## Why?
 
@@ -108,7 +161,7 @@ The tool is very simple and probably not super useful for many people, but it do
 
 ## Dependencies
 
-- [opencode](https://github.com/anomalyco/opencode) — plan and build agents
+- [opencode](https://github.com/anomalyco/opencode) — plan, build, and review agents
 - [ponytail](https://github.com/DietrichGebert/ponytail) — additional skill
 
 ## License

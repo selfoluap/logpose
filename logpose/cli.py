@@ -12,6 +12,8 @@ from logpose.db import (
     task_add, task_get, task_list, task_update, task_delete,
     task_add_dep, task_remove_dep, task_get_deps, task_get_dependents,
     task_get_blocked, task_get_ready, get_stats,
+    brain_add, brain_get, brain_list, brain_update, brain_delete, brain_tags,
+    bug_add, bug_get, bug_get_by_source_url, bug_list, bug_update, bug_delete,
 )
 from logpose.graph import render_graph, render_graph_dot
 from logpose.config import load_config, save_config, get_model_for_complexity, get_model_for_role, reset_config
@@ -53,6 +55,8 @@ def cmd_status(args):
     stats = get_stats(conn)
     print(f"Projects:       {stats['projects']}")
     print(f"Ideas:          {stats['ideas']}  (new: {stats['ideas_new']})")
+    print(f"Brain ideas:    {stats['brain_ideas']}  (new: {stats['brain_new']})")
+    print(f"Bugs:           {stats['bugs']}  (new: {stats['bugs_new']}, confirmed: {stats['bugs_confirmed']}, promoted: {stats['bugs_promoted']})")
     print(f"Tasks:          {stats['tasks']}")
     print(f"  pending:      {stats['tasks_pending']}")
     print(f"  planned:      {stats['tasks_planned']}")
@@ -84,7 +88,8 @@ def cmd_project_list(args):
     for p in project_list(conn):
         idea_count = len(idea_list(conn, project_id=p["id"]))
         task_count = len(task_list(conn, project_id=p["id"]))
-        print(f"  #{p['id']} {p['name']}  ({task_count} tasks, {idea_count} ideas)")
+        bug_count = len(bug_list(conn, project_id=p["id"]))
+        print(f"  #{p['id']} {p['name']}  ({task_count} tasks, {idea_count} ideas, {bug_count} bugs)")
         print(f"       path: {p['path']}")
     conn.close()
 
@@ -102,6 +107,11 @@ def cmd_project_show(args):
         print(f"\n  Tasks ({len(tasks)}):")
         for t in tasks:
             print(f"    #{t['id']} [{t['status']}] {t['title']}")
+    bugs = bug_list(conn, project_id=proj["id"])
+    if bugs:
+        print(f"\n  Bugs ({len(bugs)}):")
+        for b in bugs:
+            print(f"    #{b['id']} [{b['status']}] {b['title']}")
     conn.close()
 
 def cmd_project_rm(args):
@@ -232,6 +242,92 @@ def cmd_idea_rm(args):
     else:
         print(f"Idea #{args.id} not found.")
     conn.close()
+
+# ─── Bug commands ─────────────────────────────────────────────────────────────
+
+def cmd_bug_add(args):
+    conn = get_db()
+    proj = _resolve_project(conn, args.project)
+    desc = args.description
+    if desc is None and not sys.stdin.isatty():
+        desc = sys.stdin.read().strip()
+    bug = bug_add(
+        conn,
+        proj["id"],
+        args.title,
+        description=desc,
+        source_url=args.source_url,
+        count=args.count,
+        first_seen=args.first_seen,
+        last_seen=args.last_seen,
+        level=args.level,
+    )
+    print(f"Bug #{bug['id']} [{bug['status']}] \'{bug['title']}\' in project \'{proj['name']}\'")
+    conn.close()
+
+
+def cmd_bug_list(args):
+    conn = get_db()
+    proj_id = None
+    if args.project:
+        proj = _resolve_project(conn, args.project)
+        proj_id = proj["id"]
+    bugs = bug_list(conn, project_id=proj_id, status=args.status)
+    if not bugs:
+        print("(no bugs)")
+    for b in bugs:
+        bits = []
+        if b["level"]:
+            bits.append(b["level"])
+        if b["count"]:
+            bits.append(f"{b['count']} events")
+        meta = f" ({', '.join(bits)})" if bits else ""
+        print(f"  #{b['id']} [{b['status']}] {b['title']}  ({b['project_name']}){meta}")
+        if b["source_url"]:
+            print(f"       {b['source_url']}")
+    conn.close()
+
+
+def cmd_bug_show(args):
+    conn = get_db()
+    bug = bug_get(conn, args.id)
+    _print_row(bug, ["id", "project_id", "task_id", "title", "description", "source_url", "count", "first_seen", "last_seen", "level", "status", "created_at", "updated_at"])
+    conn.close()
+
+
+def cmd_bug_status(args):
+    valid = ["new", "confirmed", "promoted"]
+    if args.status not in valid:
+        print(f"Invalid status \'{args.status}\'. Valid: {', '.join(valid)}")
+        sys.exit(1)
+    conn = get_db()
+    bug = bug_update(conn, args.id, status=args.status)
+    print(f"Bug #{args.id} status → {args.status}" if bug else f"Bug #{args.id} not found.")
+    conn.close()
+
+
+def cmd_bug_promote(args):
+    conn = get_db()
+    bug = bug_get(conn, args.id)
+    if not bug:
+        print(f"Bug #{args.id} not found.")
+        sys.exit(1)
+    if bug["status"] == "promoted":
+        print(f"Bug #{args.id} is already promoted.")
+        sys.exit(1)
+    desc = bug["description"] or ""
+    task = task_add(conn, bug["project_id"], bug["title"], description=desc, complexity=args.complexity)
+    bug_update(conn, args.id, status="promoted", task_id=task["id"])
+    print(f"Bug #{args.id} \'{bug['title']}\' → Task #{task['id']}")
+    conn.close()
+
+
+def cmd_bug_rm(args):
+    conn = get_db()
+    bug = bug_delete(conn, args.id)
+    print(f"Bug #{args.id} removed." if bug else f"Bug #{args.id} not found.")
+    conn.close()
+
 
 # ─── Task commands ───────────────────────────────────────────────────────────
 
@@ -570,6 +666,93 @@ def cmd_blocked(args):
         print(f"       blocked by: {dep_str}")
     conn.close()
 
+# ─── Brain commands ──────────────────────────────────────────────────────────
+
+def cmd_brain_add(args):
+    conn = get_db()
+    desc = args.description
+    if desc is None and not sys.stdin.isatty():
+        desc = sys.stdin.read().strip()
+    idea = brain_add(conn, args.title, description=desc, tag=args.tag)
+    tag_str = f" [{args.tag}]" if args.tag else ""
+    print(f"Brain #{idea['id']} '{idea['title']}' added{tag_str}")
+    conn.close()
+
+
+def cmd_brain_list(args):
+    conn = get_db()
+    ideas = brain_list(conn, tag=args.tag, status=args.status)
+    if not ideas:
+        print("(no brain ideas)")
+    for i in ideas:
+        tag_str = f" [{i['tag']}]" if i["tag"] else ""
+        desc_preview = (i["description"] or "")[:80]
+        print(f"  #{i['id']} [{i['status']}] {i['title']}{tag_str}")
+        if desc_preview:
+            print(f"       {desc_preview}")
+    conn.close()
+
+
+def cmd_brain_show(args):
+    conn = get_db()
+    idea = brain_get(conn, args.id)
+    if not idea:
+        print(f"Brain #{args.id} not found.")
+        conn.close()
+        return
+    _print_row(idea, ["id", "title", "description", "tag", "status", "created_at", "updated_at"])
+    conn.close()
+
+
+def cmd_brain_tag(args):
+    conn = get_db()
+    idea = brain_get(conn, args.id)
+    if not idea:
+        print(f"Brain #{args.id} not found.")
+        conn.close()
+        return
+    old_tag = idea["tag"] or "(none)"
+    brain_update(conn, args.id, tag=args.tag)
+    print(f"Brain #{args.id} tag: {old_tag} → {args.tag}")
+    conn.close()
+
+
+def cmd_brain_status(args):
+    conn = get_db()
+    valid_statuses = ["new", "exploring", "abandoned", "done"]
+    if args.status not in valid_statuses:
+        print(f"Invalid status '{args.status}'. Valid: {', '.join(valid_statuses)}")
+        sys.exit(1)
+    idea = brain_get(conn, args.id)
+    if not idea:
+        print(f"Brain #{args.id} not found.")
+        conn.close()
+        return
+    brain_update(conn, args.id, status=args.status)
+    print(f"Brain #{args.id} status: {idea['status']} → {args.status}")
+    conn.close()
+
+
+def cmd_brain_tags(args):
+    conn = get_db()
+    tags = brain_tags(conn)
+    if not tags:
+        print("(no tags)")
+    for t in tags:
+        print(f"  {t['tag']}: {t['count']}")
+    conn.close()
+
+
+def cmd_brain_rm(args):
+    conn = get_db()
+    idea = brain_delete(conn, args.id)
+    if idea:
+        print(f"Brain #{args.id} '{idea['title']}' removed.")
+    else:
+        print(f"Brain #{args.id} not found.")
+    conn.close()
+
+
 # ─── Config commands ────────────────────────────────────────────────────────
 
 def cmd_config_show(args):
@@ -613,6 +796,18 @@ def cmd_config_reset(args):
     import copy
     save_config(copy.deepcopy(DEFAULT_CONFIG))
     print("Config reset to defaults.")
+
+# ─── Sentry commands ──────────────────────────────────────────────────────────
+
+def cmd_sentry_map(args):
+    """Map a Sentry project slug to a logpose project name."""
+    from logpose.config import set_sentry_project_mapping
+    conn = get_db()
+    proj = _resolve_project(conn, args.logpose_project)
+    set_sentry_project_mapping(args.sentry_project, proj["name"])
+    print(f"Sentry project \'{args.sentry_project}\' → logpose project \'{proj['name']}\'")
+    conn.close()
+
 
 # ─── Utility ─────────────────────────────────────────────────────────────────
 
@@ -709,6 +904,44 @@ def main():
     irm.add_argument("id", type=int)
     irm.set_defaults(func=cmd_idea_rm)
 
+    # bug
+    p_bug = sub.add_parser("bug", help="Bug management")
+    bsub = p_bug.add_subparsers(dest="subcommand")
+
+    ba = bsub.add_parser("add", help="Add or update a bug")
+    ba.add_argument("project")
+    ba.add_argument("title")
+    ba.add_argument("-d", "--description", default=None)
+    ba.add_argument("--source-url", default=None)
+    ba.add_argument("--count", type=int, default=1)
+    ba.add_argument("--first-seen", default=None)
+    ba.add_argument("--last-seen", default=None)
+    ba.add_argument("--level", choices=["fatal", "error", "warning", "info"], default=None)
+    ba.set_defaults(func=cmd_bug_add)
+
+    bl = bsub.add_parser("list", help="List bugs")
+    bl.add_argument("project", nargs="?", default=None)
+    bl.add_argument("-s", "--status", choices=["new", "confirmed", "promoted"], default=None)
+    bl.set_defaults(func=cmd_bug_list)
+
+    bs = bsub.add_parser("show", help="Show bug details")
+    bs.add_argument("id", type=int)
+    bs.set_defaults(func=cmd_bug_show)
+
+    bst = bsub.add_parser("status", help="Update bug status")
+    bst.add_argument("id", type=int)
+    bst.add_argument("status")
+    bst.set_defaults(func=cmd_bug_status)
+
+    bp = bsub.add_parser("promote", help="Convert bug to task")
+    bp.add_argument("id", type=int)
+    bp.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None)
+    bp.set_defaults(func=cmd_bug_promote)
+
+    brm = bsub.add_parser("rm", help="Remove a bug")
+    brm.add_argument("id", type=int)
+    brm.set_defaults(func=cmd_bug_rm)
+
     # task
     p_task = sub.add_parser("task", help="Task management")
     tsub = p_task.add_subparsers(dest="subcommand")
@@ -754,6 +987,14 @@ def main():
     tw.add_argument("id", type=int)
     tw.set_defaults(func=cmd_task_watch)
 
+    # sentry
+    p_sentry = sub.add_parser("sentry", help="Sentry integration config")
+    ssub = p_sentry.add_subparsers(dest="subcommand")
+    sm = ssub.add_parser("map", help="Map Sentry project slug to logpose project")
+    sm.add_argument("sentry_project")
+    sm.add_argument("logpose_project")
+    sm.set_defaults(func=cmd_sentry_map)
+
     # config
     p_config = sub.add_parser("config", help="Model mapping configuration")
     csub = p_config.add_subparsers(dest="subcommand")
@@ -779,6 +1020,35 @@ def main():
     p_blk = sub.add_parser("blocked", help="Show blocked tasks")
     p_blk.add_argument("project", nargs="?", default=None)
     p_blk.set_defaults(func=cmd_blocked)
+
+    # brain
+    p_brain = sub.add_parser("brain", help="Personal idea inbox (project-less ideas)")
+    bsub = p_brain.add_subparsers(dest="subcommand")
+    ba = bsub.add_parser("add", help="Add a brain idea")
+    ba.add_argument("title")
+    ba.add_argument("-d", "--description", default=None)
+    ba.add_argument("-t", "--tag", default=None, help="Category tag (e.g. go, learning, web)")
+    ba.set_defaults(func=cmd_brain_add)
+    bl = bsub.add_parser("list", help="List brain ideas")
+    bl.add_argument("-t", "--tag", default=None, help="Filter by tag")
+    bl.add_argument("-s", "--status", default=None, choices=["new", "exploring", "abandoned", "done"])
+    bl.set_defaults(func=cmd_brain_list)
+    bs = bsub.add_parser("show", help="Show brain idea details")
+    bs.add_argument("id", type=int)
+    bs.set_defaults(func=cmd_brain_show)
+    btag = bsub.add_parser("tag", help="Set tag on a brain idea")
+    btag.add_argument("id", type=int)
+    btag.add_argument("tag", help="New tag (e.g. go, learning, web)")
+    btag.set_defaults(func=cmd_brain_tag)
+    bstatus = bsub.add_parser("status", help="Set status on a brain idea")
+    bstatus.add_argument("id", type=int)
+    bstatus.add_argument("status", choices=["new", "exploring", "abandoned", "done"])
+    bstatus.set_defaults(func=cmd_brain_status)
+    btags = bsub.add_parser("tags", help="List all tags with counts")
+    btags.set_defaults(func=cmd_brain_tags)
+    brm = bsub.add_parser("rm", help="Remove a brain idea")
+    brm.add_argument("id", type=int)
+    brm.set_defaults(func=cmd_brain_rm)
 
     args = parser.parse_args()
 

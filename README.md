@@ -100,6 +100,30 @@ lg task undep <id> <dep_id>   # Remove a dependency
 lg task rm <id>
 ```
 
+### Bugs (defects & integrations)
+
+```bash
+lg bug add <project> "<title>" -d "<description>" \
+  --source-url <url> --count <n> --first-seen <ts> --last-seen <ts> --level <fatal|error|warning|info>
+lg bug list [project] [-s new|confirmed|promoted]
+lg bug show <id>
+lg bug status <id> <new|confirmed|promoted>
+lg bug promote <id> -c <1-5>   # Convert bug → task (enters the pipeline)
+lg bug rm <id>
+```
+
+Bugs are created automatically by integrations (Sentry) or manually. Upsert by
+`--source-url` — re-adding the same URL updates count/last_seen instead of duplicating.
+
+### Sentry integration
+
+```bash
+lg sentry map <sentry_project_slug> <logpose_project>
+```
+
+Maps a Sentry project to a Logpose project so a polling cronjob knows where to
+file incoming issues as bugs.
+
 ### Model configuration
 
 ```bash
@@ -125,6 +149,7 @@ lg blocked [project]        # Tasks blocked by dependencies
 
 - **Ideas** are raw feature requests or bugs. Status: `new` → `refined` → `converted`
 - **Tasks** are actionable work items. Status: `pending` → `planned` → `in_progress` → `done` (or `blocked`)
+- **Bugs** are defects from humans or integrations (e.g. Sentry). Status: `new` → `confirmed` → promoted to task
 - **Pipeline roles** (refine, plan, review) each use a dedicated model optimized for that stage
 - **Complexity** (1–5) determines which build model handles implementation
 - **Dependencies** enforce execution order (with cycle detection)

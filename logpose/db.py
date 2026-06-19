@@ -50,11 +50,42 @@ CREATE TABLE IF NOT EXISTS task_deps (
     PRIMARY KEY (task_id, depends_on_id)
 );
 
+CREATE TABLE IF NOT EXISTS bugs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    task_id     INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+    title       TEXT NOT NULL,
+    description TEXT,
+    source_url  TEXT UNIQUE,
+    count       INTEGER NOT NULL DEFAULT 1,
+    first_seen  TEXT,
+    last_seen   TEXT,
+    level       TEXT,
+    status      TEXT NOT NULL DEFAULT 'new',
+    created_at  REAL NOT NULL,
+    updated_at  REAL NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_ideas_project ON ideas(project_id);
 CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status);
+CREATE TABLE IF NOT EXISTS brain_ideas (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT NOT NULL,
+    description TEXT,
+    tag         TEXT,
+    status      TEXT NOT NULL DEFAULT 'new',
+    created_at  REAL NOT NULL,
+    updated_at  REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_brain_tag ON brain_ideas(tag);
+CREATE INDEX IF NOT EXISTS idx_brain_status ON brain_ideas(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_task_deps_depends ON task_deps(depends_on_id);
+CREATE INDEX IF NOT EXISTS idx_bugs_project ON bugs(project_id);
+CREATE INDEX IF NOT EXISTS idx_bugs_status ON bugs(status);
+CREATE INDEX IF NOT EXISTS idx_bugs_source_url ON bugs(source_url);
 """
 
 # Migration: add log_path column if it doesn't exist (idempotent)
@@ -328,6 +359,136 @@ def task_get_ready(conn, project_id=None):
     return conn.execute(query, params).fetchall()
 
 
+# ─── Bugs ─────────────────────────────────────────────────────────────────────
+
+def bug_add(conn, project_id, title, description=None, source_url=None, count=1,
+            first_seen=None, last_seen=None, level=None):
+    """Add a new bug, or upsert (update) if source_url already exists."""
+    ts = now()
+    if source_url:
+        existing = bug_get_by_source_url(conn, source_url)
+        if existing:
+            return bug_update(conn, existing["id"], count=count, last_seen=last_seen, level=level)
+
+    conn.execute(
+        """INSERT INTO bugs
+           (project_id, title, description, source_url, count, first_seen, last_seen, level, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)""",
+        (project_id, title, description, source_url, count or 1, first_seen, last_seen, level, ts, ts),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM bugs WHERE id = last_insert_rowid()").fetchone()
+
+
+def bug_get(conn, bug_id):
+    """Get a bug by id."""
+    return conn.execute("SELECT * FROM bugs WHERE id = ?", (bug_id,)).fetchone()
+
+
+def bug_get_by_source_url(conn, source_url):
+    """Get a bug by its source URL (dedup key)."""
+    return conn.execute("SELECT * FROM bugs WHERE source_url = ?", (source_url,)).fetchone()
+
+
+def bug_list(conn, project_id=None, status=None):
+    """List bugs, optionally filtered by project and/or status."""
+    query = "SELECT b.*, p.name as project_name FROM bugs b JOIN projects p ON b.project_id = p.id WHERE 1=1"
+    params = []
+    if project_id is not None:
+        query += " AND b.project_id = ?"
+        params.append(project_id)
+    if status:
+        query += " AND b.status = ?"
+        params.append(status)
+    query += " ORDER BY COALESCE(b.last_seen, b.created_at) DESC"
+    return conn.execute(query, params).fetchall()
+
+
+def bug_update(conn, bug_id, **kwargs):
+    """Update bug fields."""
+    allowed = {"title", "description", "source_url", "count", "first_seen", "last_seen", "level", "status", "task_id"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return bug_get(conn, bug_id)
+    updates["updated_at"] = now()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [bug_id]
+    conn.execute(f"UPDATE bugs SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    return bug_get(conn, bug_id)
+
+
+def bug_delete(conn, bug_id):
+    """Delete a bug."""
+    bug = bug_get(conn, bug_id)
+    if bug:
+        conn.execute("DELETE FROM bugs WHERE id = ?", (bug_id,))
+        conn.commit()
+    return bug
+
+
+# ─── Brain Ideas ──────────────────────────────────────────────────────────────
+
+def brain_add(conn, title, description=None, tag=None):
+    """Add a new brain idea. Returns the idea row."""
+    ts = now()
+    conn.execute(
+        "INSERT INTO brain_ideas (title, description, tag, status, created_at, updated_at) VALUES (?, ?, ?, 'new', ?, ?)",
+        (title, description, tag, ts, ts),
+    )
+    conn.commit()
+    return conn.execute("SELECT * FROM brain_ideas WHERE id = last_insert_rowid()").fetchone()
+
+
+def brain_get(conn, brain_id):
+    """Get a brain idea by id."""
+    return conn.execute("SELECT * FROM brain_ideas WHERE id = ?", (brain_id,)).fetchone()
+
+
+def brain_list(conn, tag=None, status=None):
+    """List brain ideas, optionally filtered by tag and/or status."""
+    query = "SELECT * FROM brain_ideas WHERE 1=1"
+    params = []
+    if tag:
+        query += " AND tag = ?"
+        params.append(tag)
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    query += " ORDER BY created_at DESC"
+    return conn.execute(query, params).fetchall()
+
+
+def brain_update(conn, brain_id, **kwargs):
+    """Update brain idea fields."""
+    allowed = {"title", "description", "tag", "status"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return brain_get(conn, brain_id)
+    updates["updated_at"] = now()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [brain_id]
+    conn.execute(f"UPDATE brain_ideas SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    return brain_get(conn, brain_id)
+
+
+def brain_delete(conn, brain_id):
+    """Delete a brain idea."""
+    idea = brain_get(conn, brain_id)
+    if idea:
+        conn.execute("DELETE FROM brain_ideas WHERE id = ?", (brain_id,))
+        conn.commit()
+    return idea
+
+
+def brain_tags(conn):
+    """Get all distinct tags with counts."""
+    return conn.execute(
+        "SELECT tag, COUNT(*) as count FROM brain_ideas WHERE tag IS NOT NULL GROUP BY tag ORDER BY tag"
+    ).fetchall()
+
+
 # ─── Stats ───────────────────────────────────────────────────────────────────
 
 def get_stats(conn):
@@ -342,4 +503,10 @@ def get_stats(conn):
         "tasks_in_progress": conn.execute("SELECT COUNT(*) FROM tasks WHERE status='in_progress'").fetchone()[0],
         "tasks_done": conn.execute("SELECT COUNT(*) FROM tasks WHERE status='done'").fetchone()[0],
         "tasks_blocked": conn.execute("SELECT COUNT(*) FROM tasks WHERE status='blocked'").fetchone()[0],
+        "brain_ideas": conn.execute("SELECT COUNT(*) FROM brain_ideas").fetchone()[0],
+        "brain_new": conn.execute("SELECT COUNT(*) FROM brain_ideas WHERE status='new'").fetchone()[0],
+        "bugs": conn.execute("SELECT COUNT(*) FROM bugs").fetchone()[0],
+        "bugs_new": conn.execute("SELECT COUNT(*) FROM bugs WHERE status='new'").fetchone()[0],
+        "bugs_confirmed": conn.execute("SELECT COUNT(*) FROM bugs WHERE status='confirmed'").fetchone()[0],
+        "bugs_promoted": conn.execute("SELECT COUNT(*) FROM bugs WHERE status='promoted'").fetchone()[0],
     }

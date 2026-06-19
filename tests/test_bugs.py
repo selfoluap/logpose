@@ -28,6 +28,42 @@ def test_bug_upsert_and_promote():
         conn.close()
 
 
+def test_graph_shows_bug_count():
+    """cmd_graph prints bug count when a project is specified."""
+    import sys
+    from io import StringIO
+    import argparse
+
+    with tempfile.NamedTemporaryFile() as f:
+        db_path = f.name
+        conn = get_db(db_path)
+        proj = project_add(conn, "graphtest", "/tmp/graphtest")
+        bug_add(conn, proj["id"], "Bug 1")
+        bug_add(conn, proj["id"], "Bug 2")
+        conn.close()
+
+        from logpose import db as db_mod
+        orig = db_mod.DEFAULT_DB_PATH
+        db_mod.DEFAULT_DB_PATH = db_path
+
+        from logpose.cli import cmd_graph
+        args = argparse.Namespace(project="graphtest", format="ascii")
+
+        captured = StringIO()
+        old = sys.stdout
+        sys.stdout = captured
+        try:
+            cmd_graph(args)
+        finally:
+            sys.stdout = old
+
+        db_mod.DEFAULT_DB_PATH = orig
+
+        output = captured.getvalue()
+        assert "Bugs: 2" in output, f"Expected 'Bugs: 2' in output, got: {output}"
+
+
 if __name__ == "__main__":
     test_bug_upsert_and_promote()
-    print("test_bug_upsert_and_promote: OK")
+    test_graph_shows_bug_count()
+    print("all tests OK")

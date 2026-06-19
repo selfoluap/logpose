@@ -627,6 +627,9 @@ def cmd_graph(args):
     if args.format == "dot":
         print(render_graph_dot(conn, project_id=proj_id))
     else:
+        if proj_id:
+            bugs = bug_list(conn, project_id=proj_id)
+            print(f"  Bugs: {len(bugs)}")
         print(render_graph(conn, project_id=proj_id))
     conn.close()
 

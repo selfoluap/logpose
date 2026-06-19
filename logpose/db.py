@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS projects (
     name        TEXT NOT NULL UNIQUE,
     path        TEXT NOT NULL,
     agents_md_path TEXT,
+    pr_workflow INTEGER NOT NULL DEFAULT 0,
     created_at  REAL NOT NULL,
     updated_at  REAL NOT NULL
 );
@@ -92,6 +93,7 @@ _MIGRATIONS = [
     "ALTER TABLE tasks ADD COLUMN log_path TEXT",
     "ALTER TABLE ideas ADD COLUMN complexity INTEGER",
     "ALTER TABLE tasks ADD COLUMN complexity INTEGER",
+    "ALTER TABLE projects ADD COLUMN pr_workflow INTEGER DEFAULT 0",
 ]
 
 
@@ -132,12 +134,12 @@ def _update(conn, table, row_id, allowed, get_fn, **kwargs):
 
 # ─── Projects ────────────────────────────────────────────────────────────────
 
-def project_add(conn, name, path, agents_md_path=None):
+def project_add(conn, name, path, agents_md_path=None, pr_workflow=0):
     """Add a new project. Returns the project row."""
     ts = now()
     conn.execute(
-        "INSERT INTO projects (name, path, agents_md_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (name, path, agents_md_path, ts, ts),
+        "INSERT INTO projects (name, path, agents_md_path, pr_workflow, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, path, agents_md_path, int(bool(pr_workflow)), ts, ts),
     )
     conn.commit()
     return project_get(conn, name)
@@ -163,6 +165,10 @@ def project_delete(conn, name_or_id):
     conn.execute("DELETE FROM projects WHERE id = ?", (proj["id"],))
     conn.commit()
     return proj
+
+
+def project_update(conn, project_id, **kwargs):
+    return _update(conn, "projects", project_id, {"name", "path", "agents_md_path", "pr_workflow"}, project_get, **kwargs)
 
 
 # ─── Ideas ───────────────────────────────────────────────────────────────────

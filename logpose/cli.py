@@ -3,11 +3,13 @@
 
 import argparse
 import os
+import re
+import subprocess
 import sys
 
 from logpose.db import (
     get_db,
-    project_add, project_get, project_list, project_delete,
+    project_add, project_get, project_list, project_delete, project_update,
     idea_add, idea_get, idea_list, idea_update, idea_delete,
     task_add, task_get, task_list, task_update, task_delete,
     task_add_dep, task_remove_dep, task_get_deps, task_get_dependents,
@@ -16,7 +18,10 @@ from logpose.db import (
     bug_add, bug_get, bug_list, bug_update, bug_delete,
 )
 from logpose.graph import render_graph, render_graph_dot
-from logpose.config import load_config, save_config, get_model_for_complexity, get_model_for_role
+from logpose.config import (
+    load_config, save_config, get_model_for_complexity, get_model_for_role,
+    pr_add_dir, pr_remove_dir, pr_dirs,
+)
 
 
 def _resolve_project(conn, name_or_id):
@@ -77,10 +82,12 @@ def cmd_project_add(args):
             if os.path.isfile(p):
                 agents_md = p
                 break
-    proj = project_add(conn, args.name, os.path.abspath(args.path), agents_md_path=agents_md)
+    proj = project_add(conn, args.name, os.path.abspath(args.path), agents_md_path=agents_md, pr_workflow=args.pr)
     print(f"Project '{proj['name']}' added (id={proj['id']})")
     if agents_md:
         print(f"  AGENTS.md: {agents_md}")
+    if proj["pr_workflow"]:
+        print("  PR workflow: enabled")
     conn.close()
 
 def cmd_project_list(args):
@@ -96,7 +103,7 @@ def cmd_project_list(args):
 def cmd_project_show(args):
     conn = get_db()
     proj = _resolve_project(conn, args.name)
-    _print_row(proj, ["id", "name", "path", "agents_md_path", "created_at"])
+    _print_row(proj, ["id", "name", "path", "agents_md_path", "pr_workflow", "created_at"])
     ideas = idea_list(conn, project_id=proj["id"])
     tasks = task_list(conn, project_id=proj["id"])
     if ideas:
@@ -119,6 +126,18 @@ def cmd_project_rm(args):
     proj = _resolve_project(conn, args.name)
     project_delete(conn, proj["id"])
     print(f"Project '{proj['name']}' and all its ideas/tasks removed.")
+    conn.close()
+
+
+def cmd_project_update(args):
+    conn = get_db()
+    proj = _resolve_project(conn, args.name)
+    if args.pr == args.no_pr:
+        print("Specify exactly one of --pr or --no-pr.")
+        conn.close()
+        sys.exit(1)
+    updated = project_update(conn, proj["id"], pr_workflow=1 if args.pr else 0)
+    print(f"Project '{updated['name']}' PR workflow: {'enabled' if updated['pr_workflow'] else 'disabled'}")
     conn.close()
 
 # ─── Idea commands ───────────────────────────────────────────────────────────
@@ -433,9 +452,18 @@ def cmd_task_build(args):
             print("Proceeding with --force...")
 
     proj = project_get(conn, task["project_id"])
+    config = load_config()
 
     model = get_model_for_complexity(task["complexity"])
     print(f"[logpose] Model: {model} (complexity: {task['complexity'] or 'default(3)'})")
+
+    pr_mode = _is_pr_mode(proj, config)
+    branch = _task_branch_name(task) if pr_mode else _current_branch(proj["path"])
+    if pr_mode:
+        print(f"[logpose] PR mode: branch {branch}")
+        _git(proj["path"], "checkout", "-b", branch)
+    else:
+        print(f"[logpose] Direct mode: {branch}")
 
     task_update(conn, args.id, status="in_progress")
     print(f"Task #{args.id} status: {task['status']} → in_progress")
@@ -455,6 +483,12 @@ def cmd_task_build(args):
         task_update(conn, args.id, log_path=log_path)
 
     if exit_code == 0:
+        if pr_mode:
+            _git(proj["path"], "push", "-u", "origin", branch)
+            if config.get("pr_workflow", {}).get("auto_pr", True):
+                subprocess.check_call(["gh", "pr", "create", "--fill"], cwd=proj["path"])
+        else:
+            _git(proj["path"], "push", "origin", branch)
         task_update(conn, args.id, status="done")
         print(f"Task #{args.id} status: in_progress → done")
     else:
@@ -774,6 +808,25 @@ def cmd_config_show(args):
         print(f"  {level}: {model}")
 
 
+def cmd_config_pr_add(args):
+    path = pr_add_dir(args.dir)
+    print(f"PR workflow dir added: {path}")
+
+
+def cmd_config_pr_remove(args):
+    path = pr_remove_dir(args.dir)
+    print(f"PR workflow dir removed: {path}")
+
+
+def cmd_config_pr_list(args):
+    dirs = pr_dirs()
+    if not dirs:
+        print("(no PR workflow dirs)")
+        return
+    for path in dirs:
+        print(path)
+
+
 def cmd_config_set(args):
     """Set the model for a complexity level or pipeline role."""
     config = load_config()
@@ -849,6 +902,34 @@ def _would_cycle(conn, task_id, dep_ids):
             return True
     return False
 
+
+def _task_branch_name(task):
+    slug = re.sub(r"[^\w\s-]", "", task["title"].lower().strip())
+    slug = re.sub(r"[-\s]+", "-", slug).strip("-")
+    return f"task-{task['id']}-{slug}"[:40].rstrip("-")
+
+
+def _git(project_path, *args):
+    subprocess.check_call(["git", *args], cwd=project_path)
+
+
+def _current_branch(project_path):
+    return subprocess.check_output(["git", "branch", "--show-current"], cwd=project_path, text=True).strip()
+
+
+def _is_pr_mode(project, config):
+    project_path = os.path.abspath(project["path"])
+    if project["pr_workflow"]:
+        return True
+    for path in config.get("pr_workflow", {}).get("dirs", []):
+        root = os.path.abspath(os.path.expanduser(path))
+        try:
+            if os.path.commonpath([project_path, root]) == root:
+                return True
+        except ValueError:
+            pass
+    return False
+
 # ─── Main CLI ────────────────────────────────────────────────────────────────
 
 def main():
@@ -867,11 +948,17 @@ def main():
     pa = psub.add_parser("add", help="Register a project")
     pa.add_argument("name")
     pa.add_argument("path")
+    pa.add_argument("--pr", action="store_true", help="Use PR workflow for this project")
     pa.set_defaults(func=cmd_project_add)
     psub.add_parser("list", help="List projects").set_defaults(func=cmd_project_list)
     ps = psub.add_parser("show", help="Show project details")
     ps.add_argument("name")
     ps.set_defaults(func=cmd_project_show)
+    pu = psub.add_parser("update", help="Update project settings")
+    pu.add_argument("name")
+    pu.add_argument("--pr", action="store_true")
+    pu.add_argument("--no-pr", action="store_true")
+    pu.set_defaults(func=cmd_project_update)
     pr = psub.add_parser("rm", help="Remove a project")
     pr.add_argument("name")
     pr.set_defaults(func=cmd_project_rm)
@@ -1009,6 +1096,14 @@ def main():
     cset.set_defaults(func=cmd_config_set)
     creset = csub.add_parser("reset", help="Reset to default model mapping")
     creset.set_defaults(func=cmd_config_reset)
+    cpradd = csub.add_parser("pr-add", help="Add PR workflow directory")
+    cpradd.add_argument("dir")
+    cpradd.set_defaults(func=cmd_config_pr_add)
+    cprrm = csub.add_parser("pr-remove", help="Remove PR workflow directory")
+    cprrm.add_argument("dir")
+    cprrm.set_defaults(func=cmd_config_pr_remove)
+    cprlist = csub.add_parser("pr-list", help="List PR workflow directories")
+    cprlist.set_defaults(func=cmd_config_pr_list)
 
     # graph
     p_graph = sub.add_parser("graph", help="Dependency graph")

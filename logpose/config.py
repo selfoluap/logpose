@@ -27,6 +27,10 @@ DEFAULT_CONFIG = {
     "sentry": {
         "projects": {}
     },
+    "pr_workflow": {
+        "dirs": [],
+        "auto_pr": True,
+    },
 }
 
 
@@ -44,6 +48,12 @@ def load_config():
             if role not in config.get("models", {}):
                 config["models"][role] = DEFAULT_CONFIG["models"][role]
                 changed = True
+        if "pr_workflow" not in config:
+            config["pr_workflow"] = dict(DEFAULT_CONFIG["pr_workflow"])
+            changed = True
+        else:
+            config["pr_workflow"].setdefault("dirs", [])
+            config["pr_workflow"].setdefault("auto_pr", True)
         if changed:
             save_config(config)
         return config
@@ -102,3 +112,26 @@ def set_sentry_project_mapping(sentry_project, logpose_project):
     config = load_config()
     config.setdefault("sentry", {}).setdefault("projects", {})[sentry_project] = logpose_project
     save_config(config)
+
+
+def pr_dirs():
+    return load_config().get("pr_workflow", {}).get("dirs", [])
+
+
+def pr_add_dir(path):
+    config = load_config()
+    dirs = config.setdefault("pr_workflow", {}).setdefault("dirs", [])
+    path = os.path.abspath(os.path.expanduser(path))
+    if path not in dirs:
+        dirs.append(path)
+        save_config(config)
+    return path
+
+
+def pr_remove_dir(path):
+    config = load_config()
+    dirs = config.setdefault("pr_workflow", {}).setdefault("dirs", [])
+    path = os.path.abspath(os.path.expanduser(path))
+    config["pr_workflow"]["dirs"] = [d for d in dirs if d != path]
+    save_config(config)
+    return path

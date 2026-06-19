@@ -49,13 +49,10 @@ def test_graph_shows_bug_count():
         from logpose.cli import cmd_graph
         args = argparse.Namespace(project="graphtest", format="ascii")
 
+        import contextlib
         captured = StringIO()
-        old = sys.stdout
-        sys.stdout = captured
-        try:
+        with contextlib.redirect_stdout(captured):
             cmd_graph(args)
-        finally:
-            sys.stdout = old
 
         db_mod.DEFAULT_DB_PATH = orig
 

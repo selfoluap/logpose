@@ -7,14 +7,8 @@ import shutil
 
 def _find_opencode():
     """Find the opencode binary. Returns path or None."""
-    candidates = [
-        shutil.which("opencode"),
-        os.path.expanduser("~/.opencode/bin/opencode"),
-    ]
-    for c in candidates:
-        if c and os.path.isfile(c):
-            return c
-    return shutil.which("opencode")
+    p = os.path.expanduser("~/.opencode/bin/opencode")
+    return shutil.which("opencode") or (p if os.path.isfile(p) else None)
 
 
 def _check_opencode():

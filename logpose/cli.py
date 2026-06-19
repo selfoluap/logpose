@@ -13,10 +13,10 @@ from logpose.db import (
     task_add_dep, task_remove_dep, task_get_deps, task_get_dependents,
     task_get_blocked, task_get_ready, get_stats,
     brain_add, brain_get, brain_list, brain_update, brain_delete, brain_tags,
-    bug_add, bug_get, bug_get_by_source_url, bug_list, bug_update, bug_delete,
+    bug_add, bug_get, bug_list, bug_update, bug_delete,
 )
 from logpose.graph import render_graph, render_graph_dot
-from logpose.config import load_config, save_config, get_model_for_complexity, get_model_for_role, reset_config
+from logpose.config import load_config, save_config, get_model_for_complexity, get_model_for_role
 
 
 def _resolve_project(conn, name_or_id):

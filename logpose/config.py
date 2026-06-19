@@ -97,21 +97,8 @@ def reset_config():
 
 # ─── Sentry integration ──────────────────────────────────────────────────────
 
-def get_sentry_project_mapping(sentry_project):
-    """Get the logpose project name mapped to a Sentry project slug."""
-    config = load_config()
-    return config.get("sentry", {}).get("projects", {}).get(sentry_project)
-
-
 def set_sentry_project_mapping(sentry_project, logpose_project):
     """Map a Sentry project slug to a logpose project name."""
     config = load_config()
     config.setdefault("sentry", {}).setdefault("projects", {})[sentry_project] = logpose_project
-    save_config(config)
-
-
-def remove_sentry_project_mapping(sentry_project):
-    """Remove a Sentry → logpose project mapping."""
-    config = load_config()
-    config.setdefault("sentry", {}).setdefault("projects", {}).pop(sentry_project, None)
     save_config(config)

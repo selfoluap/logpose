@@ -3,7 +3,6 @@
 import sqlite3
 import os
 import time
-from pathlib import Path
 
 DEFAULT_DB_DIR = os.path.expanduser("~/.logpose")
 DEFAULT_DB_PATH = os.path.join(DEFAULT_DB_DIR, "tix.db")
@@ -118,6 +117,19 @@ def now():
     return time.time()
 
 
+def _update(conn, table, row_id, allowed, get_fn, **kwargs):
+    """Generic update for any table. Returns the updated row."""
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return get_fn(conn, row_id)
+    updates["updated_at"] = now()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [row_id]
+    conn.execute(f"UPDATE {table} SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    return get_fn(conn, row_id)
+
+
 # ─── Projects ────────────────────────────────────────────────────────────────
 
 def project_add(conn, name, path, agents_md_path=None):
@@ -186,17 +198,7 @@ def idea_list(conn, project_id=None, status=None):
 
 
 def idea_update(conn, idea_id, **kwargs):
-    """Update idea fields."""
-    allowed = {"title", "description", "complexity", "refined_description", "status"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed}
-    if not updates:
-        return idea_get(conn, idea_id)
-    updates["updated_at"] = now()
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [idea_id]
-    conn.execute(f"UPDATE ideas SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    return idea_get(conn, idea_id)
+    return _update(conn, "ideas", idea_id, {"title", "description", "complexity", "refined_description", "status"}, idea_get, **kwargs)
 
 
 def idea_delete(conn, idea_id):
@@ -241,17 +243,7 @@ def task_list(conn, project_id=None, status=None):
 
 
 def task_update(conn, task_id, **kwargs):
-    """Update task fields."""
-    allowed = {"title", "description", "complexity", "plan_md_path", "log_path", "status"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed}
-    if not updates:
-        return task_get(conn, task_id)
-    updates["updated_at"] = now()
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [task_id]
-    conn.execute(f"UPDATE tasks SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    return task_get(conn, task_id)
+    return _update(conn, "tasks", task_id, {"title", "description", "complexity", "plan_md_path", "log_path", "status"}, task_get, **kwargs)
 
 
 def task_delete(conn, task_id):
@@ -405,17 +397,7 @@ def bug_list(conn, project_id=None, status=None):
 
 
 def bug_update(conn, bug_id, **kwargs):
-    """Update bug fields."""
-    allowed = {"title", "description", "source_url", "count", "first_seen", "last_seen", "level", "status", "task_id"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed}
-    if not updates:
-        return bug_get(conn, bug_id)
-    updates["updated_at"] = now()
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [bug_id]
-    conn.execute(f"UPDATE bugs SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    return bug_get(conn, bug_id)
+    return _update(conn, "bugs", bug_id, {"title", "description", "source_url", "count", "first_seen", "last_seen", "level", "status", "task_id"}, bug_get, **kwargs)
 
 
 def bug_delete(conn, bug_id):
@@ -460,17 +442,7 @@ def brain_list(conn, tag=None, status=None):
 
 
 def brain_update(conn, brain_id, **kwargs):
-    """Update brain idea fields."""
-    allowed = {"title", "description", "tag", "status"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed}
-    if not updates:
-        return brain_get(conn, brain_id)
-    updates["updated_at"] = now()
-    set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [brain_id]
-    conn.execute(f"UPDATE brain_ideas SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    return brain_get(conn, brain_id)
+    return _update(conn, "brain_ideas", brain_id, {"title", "description", "tag", "status"}, brain_get, **kwargs)
 
 
 def brain_delete(conn, brain_id):

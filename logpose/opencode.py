@@ -153,6 +153,10 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
     """Run opencode build for a task.
 
     Spawns `opencode run '...' -f plan.md` in the project directory.
+    Uses --dangerously-skip-permissions so file operations auto-approve in
+    non-interactive (no-PTY) subprocess contexts. This only affects the
+    subprocess spawned by `lg task build` — interactive opencode TUI sessions
+    are unaffected.
     Streams output to the user and captures it to a log file.
     Returns (exit_code, log_path).
     """
@@ -179,7 +183,7 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
         f"{task_description}"
     )
 
-    cmd = [binary, "run", prompt]
+    cmd = [binary, "run", "--dangerously-skip-permissions", prompt]
     if plan_md_path and os.path.isfile(plan_md_path):
         cmd.extend(["-f", plan_md_path])
         print(f"[logpose] Attaching plan: {plan_md_path}")

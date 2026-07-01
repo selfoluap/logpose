@@ -38,6 +38,16 @@ def _resolve_project(conn, name_or_id):
     return proj
 
 
+OPEN_IDEA_STATUSES = {"new", "refined"}
+OPEN_TASK_STATUSES = {"pending", "planned", "in_progress", "blocked"}
+OPEN_BUG_STATUSES = {"new", "confirmed"}
+OPEN_BRAIN_STATUSES = {"new", "exploring"}
+
+
+def _print_filtered_summary(shown, total):
+    print(f"Showing {shown} open of {total} total. Use --all to see all.")
+
+
 def _print_row(row, cols=None):
     """Print a sqlite3.Row as key: value pairs."""
     if row is None:
@@ -162,6 +172,10 @@ def cmd_idea_list(args):
         proj = _resolve_project(conn, args.project)
         proj_id = proj["id"]
     ideas = idea_list(conn, project_id=proj_id, status=args.status)
+    if not args.all and args.status is None:
+        total = len(ideas)
+        ideas = [i for i in ideas if i["status"] in OPEN_IDEA_STATUSES]
+        _print_filtered_summary(len(ideas), total)
     if not ideas:
         print("(no ideas)")
     for i in ideas:
@@ -293,6 +307,10 @@ def cmd_bug_list(args):
         proj = _resolve_project(conn, args.project)
         proj_id = proj["id"]
     bugs = bug_list(conn, project_id=proj_id, status=args.status)
+    if not args.all and args.status is None:
+        total = len(bugs)
+        bugs = [b for b in bugs if b["status"] in OPEN_BUG_STATUSES]
+        _print_filtered_summary(len(bugs), total)
     if not bugs:
         print("(no bugs)")
     for b in bugs:
@@ -370,6 +388,10 @@ def cmd_task_list(args):
         proj = _resolve_project(conn, args.project)
         proj_id = proj["id"]
     tasks = task_list(conn, project_id=proj_id, status=args.status)
+    if not args.all and args.status is None:
+        total = len(tasks)
+        tasks = [t for t in tasks if t["status"] in OPEN_TASK_STATUSES]
+        _print_filtered_summary(len(tasks), total)
     if not tasks:
         print("(no tasks)")
     for t in tasks:
@@ -739,6 +761,10 @@ def cmd_brain_add(args):
 def cmd_brain_list(args):
     conn = get_db()
     ideas = brain_list(conn, tag=args.tag, status=args.status)
+    if not args.all and args.status is None:
+        total = len(ideas)
+        ideas = [i for i in ideas if i["status"] in OPEN_BRAIN_STATUSES]
+        _print_filtered_summary(len(ideas), total)
     if not ideas:
         print("(no brain ideas)")
     for i in ideas:
@@ -995,6 +1021,7 @@ def main():
     il = isub.add_parser("list", help="List ideas")
     il.add_argument("project", nargs="?", default=None)
     il.add_argument("-s", "--status", default=None, choices=["new", "refined", "converted"])
+    il.add_argument("--all", action="store_true", help="Show all ideas, including converted")
     il.set_defaults(func=cmd_idea_list)
     is_ = isub.add_parser("show", help="Show idea details")
     is_.add_argument("id", type=int)
@@ -1032,6 +1059,7 @@ def main():
     bl = bsub.add_parser("list", help="List bugs")
     bl.add_argument("project", nargs="?", default=None)
     bl.add_argument("-s", "--status", choices=["new", "confirmed", "promoted"], default=None)
+    bl.add_argument("--all", action="store_true", help="Show all bugs, including promoted")
     bl.set_defaults(func=cmd_bug_list)
 
     bs = bsub.add_parser("show", help="Show bug details")
@@ -1064,6 +1092,7 @@ def main():
     tl = tsub.add_parser("list", help="List tasks")
     tl.add_argument("project", nargs="?", default=None)
     tl.add_argument("-s", "--status", default=None, choices=["pending", "planned", "in_progress", "done", "blocked"])
+    tl.add_argument("--all", action="store_true", help="Show all tasks, including done")
     tl.set_defaults(func=cmd_task_list)
     ts = tsub.add_parser("show", help="Show task details")
     ts.add_argument("id", type=int)
@@ -1151,6 +1180,7 @@ def main():
     bl = bsub.add_parser("list", help="List brain ideas")
     bl.add_argument("-t", "--tag", default=None, help="Filter by tag")
     bl.add_argument("-s", "--status", default=None, choices=["new", "exploring", "abandoned", "done"])
+    bl.add_argument("--all", action="store_true", help="Show all brain ideas, including done and abandoned")
     bl.set_defaults(func=cmd_brain_list)
     bs = bsub.add_parser("show", help="Show brain idea details")
     bs.add_argument("id", type=int)

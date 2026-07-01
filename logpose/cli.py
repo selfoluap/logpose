@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -1032,6 +1033,61 @@ def cmd_sentry_poll(args):
     conn.close()
 
 
+# ─── UI command ──────────────────────────────────────────────────────────────
+
+def _logpose_source_dir():
+    return Path(__file__).resolve().parents[1]
+
+
+def _find_ui_dir():
+    source = _logpose_source_dir()
+    candidates = [
+        source.parent / "logpose-ui",
+        Path.home() / "logpose-ui",
+    ]
+    for path in candidates:
+        if (path / "package.json").is_file():
+            return path
+    print("ERROR: logpose-ui not found. Expected sibling ./logpose-ui or ~/logpose-ui")
+    sys.exit(1)
+
+
+def _npm(ui_dir, *args, env=None):
+    subprocess.check_call(["npm", *args], cwd=ui_dir, env=env)
+
+
+def _ensure_ui_ready(ui_dir, build=True):
+    if not (ui_dir / "node_modules").is_dir():
+        print("Installing logpose-ui dependencies...")
+        _npm(ui_dir, "install")
+    if build and not (ui_dir / "dist").is_dir():
+        print("Building logpose-ui...")
+        _npm(ui_dir, "run", "build")
+
+
+def cmd_ui(args):
+    action = args.ui_command or "start"
+    ui_dir = _find_ui_dir()
+    env = os.environ.copy()
+    env["PORT"] = str(args.port)
+
+    if action == "build":
+        _ensure_ui_ready(ui_dir, build=False)
+        _npm(ui_dir, "run", "build")
+        print(f"Built logpose-ui in {ui_dir}")
+        return
+
+    if action == "dev":
+        _ensure_ui_ready(ui_dir, build=False)
+        print(f"Dashboard dev server starting. API: http://127.0.0.1:{args.port}")
+        _npm(ui_dir, "run", "dev", env=env)
+        return
+
+    _ensure_ui_ready(ui_dir, build=True)
+    print(f"Dashboard available at http://127.0.0.1:{args.port}")
+    _npm(ui_dir, "start", env=env)
+
+
 # ─── Utility ─────────────────────────────────────────────────────────────────
 
 def _would_cycle(conn, task_id, dep_ids):
@@ -1122,6 +1178,12 @@ def main():
     # init
     sub.add_parser("init", help="Initialize the database").set_defaults(func=cmd_init)
     sub.add_parser("status", help="Show overall stats").set_defaults(func=cmd_status)
+
+    # ui
+    p_ui = sub.add_parser("ui", help="Launch the logpose web dashboard")
+    p_ui.add_argument("ui_command", nargs="?", choices=["start", "dev", "build"], default="start")
+    p_ui.add_argument("--port", type=int, default=3737, help="Port for the dashboard server")
+    p_ui.set_defaults(func=cmd_ui)
 
     # project
     p_proj = sub.add_parser("project", help="Project management")

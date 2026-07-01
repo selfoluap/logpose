@@ -14,6 +14,7 @@ logpose/
     db.py                 # SQLite schema, CRUD operations
     graph.py              # ASCII and DOT dependency graph rendering
     opencode.py           # OpenCode integration (plan + build)
+  ui/                    # React/Vite dashboard frontend
   pyproject.toml
 ```
 
@@ -72,9 +73,9 @@ lg config show                     Show complexity → model mapping
 lg config set <1-5> <model>        Set model for a complexity level
 lg config reset                    Reset to default model mapping
 
-lg ui [start] [--port 3737]       Launch the logpose-ui dashboard
-lg ui dev [--port 3737]           Start logpose-ui dev mode (Vite hot reload)
-lg ui build                       Build logpose-ui frontend
+lg ui [start] [--port 3737]       Launch the ui/ dashboard
+lg ui dev [--port 3737]           Start ui/ dev mode (Vite hot reload)
+lg ui build                       Build the ui/ frontend
 
 lg graph [project]                ASCII dependency graph
 lg graph [project] -f dot         DOT format (for Graphviz)

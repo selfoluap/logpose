@@ -1042,13 +1042,13 @@ def _logpose_source_dir():
 def _find_ui_dir():
     source = _logpose_source_dir()
     candidates = [
-        source.parent / "logpose-ui",
+        source / "ui",
         Path.home() / "logpose-ui",
     ]
     for path in candidates:
         if (path / "package.json").is_file():
             return path
-    print("ERROR: logpose-ui not found. Expected sibling ./logpose-ui or ~/logpose-ui")
+    print("ERROR: logpose-ui not found. Expected ./ui or ~/logpose-ui")
     sys.exit(1)
 
 

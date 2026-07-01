@@ -34,14 +34,14 @@ lg project show <name>            Show project with its ideas and tasks
 lg project rm <name>              Remove project and all its ideas/tasks
 
 lg idea add <project> <title> [-d desc] [-c 1-5]   Add an idea
-lg idea list [project] [-s status]                   List ideas
+lg idea list [project] [-s status] [--all]            List ideas (open only by default; --all shows all)
 lg idea show <id>                                    Show idea details
 lg idea refine <id> [-d refined_desc] [-c 1-5]      Mark idea as refined
 lg idea convert <id>                                  Convert idea → task
 lg idea rm <id>                                      Remove an idea
 
 lg brain add <title> [-d desc] [-t tag]             Add a standalone (project-less) idea
-lg brain list [-t tag] [-s status]                   List brain ideas
+lg brain list [-t tag] [-s status] [--all]            List brain ideas (open only by default; --all shows all)
 lg brain show <id>                                   Show brain idea details
 lg brain tag <id> <tag>                              Set tag on a brain idea
 lg brain status <id> <status>                        Set status (new/exploring/abandoned/done)
@@ -49,7 +49,7 @@ lg brain tags                                        List all tags with counts
 lg brain rm <id>                                     Remove a brain idea
 
 lg task add <project> <title> [-d desc] [-c 1-5]   Add a task
-lg task list [project] [-s status]                   List tasks
+lg task list [project] [-s status] [--all]            List tasks (open only by default; --all shows all)
 lg task show <id>                                    Show task with dependencies + log path
 lg task plan <id>                                    Run opencode plan agent
 lg task build <id> [--force]                          Run opencode build agent
@@ -60,7 +60,7 @@ lg task undep <id> <dep_id>                           Remove a dependency
 lg task rm <id>                                      Remove a task
 
 lg bug add <project> <title> [-d desc] [--source-url url] [--count n] [--first-seen ts] [--last-seen ts] [--level fatal|error|warning|info]  Add or upsert a bug
-lg bug list [project] [-s new|confirmed|promoted]     List bugs
+lg bug list [project] [-s new|confirmed|promoted] [--all]  List bugs (open only by default; --all shows all)
 lg bug show <id>                                      Show bug details
 lg bug status <id> <new|confirmed|promoted>            Update bug status
 lg bug promote <id> [-c 1-5]                           Convert bug → task

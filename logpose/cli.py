@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 
+from logpose.opencode import _slugify
 from logpose.db import (
     get_db,
     project_add, project_get, project_list, project_delete, project_update,
@@ -532,11 +533,30 @@ def cmd_task_status(args):
     if args.status not in valid_statuses:
         print(f"Invalid status '{args.status}'. Valid: {', '.join(valid_statuses)}")
         sys.exit(1)
+
+    task = task_get(conn, args.id)
+    if not task:
+        print(f"Task #{args.id} not found.")
+        sys.exit(1)
+
+    # Build-log gate: refuse "done" without a build log unless --force
+    if args.status == "done" and not args.force:
+        log_path = task["log_path"]
+        log_exists = log_path and os.path.isfile(log_path)
+        if not log_exists:
+            expected = os.path.join(
+                os.path.expanduser("~/.logpose"), "logs",
+                f"task-{args.id}-{_slugify(task['title'])}.log"
+            )
+            print(f"ERROR: Task #{args.id} has no build log.")
+            print(f"  Tasks must be built via `lg task build <id>` to be marked done.")
+            print(f"  Expected log: {expected}")
+            print(f"  To bypass: `lg task status {args.id} done --force`")
+            sys.exit(1)
+
     task = task_update(conn, args.id, status=args.status)
     if task:
         print(f"Task #{args.id} status → {args.status}")
-    else:
-        print(f"Task #{args.id} not found.")
     conn.close()
 
 
@@ -1061,6 +1081,7 @@ def main():
     tst = tsub.add_parser("status", help="Update task status")
     tst.add_argument("id", type=int)
     tst.add_argument("status")
+    tst.add_argument("--force", action="store_true", help="Bypass build-log check when marking done")
     tst.set_defaults(func=cmd_task_status)
     td = tsub.add_parser("deps", help="Set task dependencies")
     td.add_argument("id", type=int)

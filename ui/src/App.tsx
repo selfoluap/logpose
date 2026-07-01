@@ -1,0 +1,61 @@
+import { Brain, KanbanSquare, LayoutDashboard, Lightbulb } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api } from "./api/client";
+import { BrainList } from "./components/BrainList";
+import { Dashboard } from "./components/Dashboard";
+import { IdeasList } from "./components/IdeasList";
+import { KanbanBoard } from "./components/KanbanBoard";
+import { Sidebar } from "./components/Sidebar";
+import type { BrainIdea, Idea, Project, StatusSummary, Task } from "./types";
+
+const views = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "tasks", label: "Tasks", icon: KanbanSquare },
+  { id: "ideas", label: "Ideas", icon: Lightbulb },
+  { id: "brain", label: "Brain", icon: Brain }
+] as const;
+
+export type View = (typeof views)[number]["id"];
+
+export default function App() {
+  const [view, setView] = useState<View>("dashboard");
+  const [status, setStatus] = useState<StatusSummary | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [brain, setBrain] = useState<BrainIdea[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([api.status(), api.projects(), api.tasks(), api.ideas(), api.brain()])
+      .then(([nextStatus, nextProjects, nextTasks, nextIdeas, nextBrain]) => {
+        setStatus(nextStatus);
+        setProjects(nextProjects);
+        setTasks(nextTasks);
+        setIdeas(nextIdeas);
+        setBrain(nextBrain);
+      })
+      .catch((nextError: unknown) => {
+        setError(nextError instanceof Error ? nextError.message : "Failed to load data");
+      });
+  }, []);
+
+  return (
+    <div className="min-h-screen md:grid md:grid-cols-[14rem_1fr]">
+      <Sidebar views={views} active={view} onChange={setView} />
+      <main className="p-4 md:p-6">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Logpose</h1>
+            <p className="text-sm text-[var(--muted)]">Local ticket dashboard</p>
+          </div>
+        </div>
+        {error ? <div className="panel p-4 text-sm text-red-300">{error}</div> : null}
+        {!error && view === "dashboard" ? <Dashboard status={status} projects={projects} /> : null}
+        {!error && view === "tasks" ? <KanbanBoard tasks={tasks} projects={projects} /> : null}
+        {!error && view === "ideas" ? <IdeasList ideas={ideas} /> : null}
+        {!error && view === "brain" ? <BrainList brain={brain} /> : null}
+      </main>
+    </div>
+  );
+}

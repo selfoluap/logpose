@@ -30,13 +30,41 @@ def test_pr_mode_matches_project_flag_or_config_dir():
         matched = project_add(conn, "matched", "/tmp/work/app")
         plain = project_add(conn, "plain", "/opt/app")
 
-        config = {"pr_workflow": {"dirs": ["/tmp/work"], "auto_pr": True}}
+        config = {"pr_workflow": {"dirs": ["/tmp/work"], "auto_pr": True, "min_complexity": None}}
 
         assert cli._is_pr_mode(flagged, config)
         assert cli._is_pr_mode(matched, config)
         assert not cli._is_pr_mode(plain, config)
 
         conn.close()
+
+
+def test_pr_mode_complexity_gated():
+    """Tasks at or above min_complexity get PRs even without project flag or dir match."""
+    with tempfile.NamedTemporaryFile() as f:
+        conn = get_db(f.name)
+        plain = project_add(conn, "plain", "/opt/app", pr_workflow=False)
+        conn.close()
+
+        config = {"pr_workflow": {"dirs": [], "auto_pr": True, "min_complexity": 3}}
+
+        # Below threshold → direct mode
+        assert not cli._is_pr_mode(plain, config, 1)
+        assert not cli._is_pr_mode(plain, config, 2)
+        # At or above threshold → PR mode
+        assert cli._is_pr_mode(plain, config, 3)
+        assert cli._is_pr_mode(plain, config, 4)
+        assert cli._is_pr_mode(plain, config, 5)
+        # No complexity (None) defaults to 3 → PR mode
+        assert cli._is_pr_mode(plain, config, None)
+
+        # With min_complexity disabled (None) → never complexity-gated
+        config_off = {"pr_workflow": {"dirs": [], "auto_pr": True, "min_complexity": None}}
+        assert not cli._is_pr_mode(plain, config_off, 5)
+
+        # Project flag overrides complexity — even C:1 gets PR
+        flagged = {"id": 0, "name": "flagged", "path": "/tmp/anything", "pr_workflow": 1}
+        assert cli._is_pr_mode(flagged, config, 1)
 
 
 def test_task_branch_name_is_capped_and_slugged():
@@ -176,6 +204,7 @@ def test_cmd_task_build_direct_mode_pushes_current_branch_only():
 if __name__ == "__main__":
     test_project_pr_workflow_column_migrates_and_updates()
     test_pr_mode_matches_project_flag_or_config_dir()
+    test_pr_mode_complexity_gated()
     test_task_branch_name_is_capped_and_slugged()
     test_cmd_task_build_pr_mode_uses_branch_push_and_pr_create()
     test_cmd_task_build_direct_mode_pushes_current_branch_only()

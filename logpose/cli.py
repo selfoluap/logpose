@@ -480,10 +480,14 @@ def cmd_task_build(args):
     model = get_model_for_complexity(task["complexity"])
     print(f"[logpose] Model: {model} (complexity: {task['complexity'] or 'default(3)'})")
 
-    pr_mode = _is_pr_mode(proj, config)
+    pr_mode = _is_pr_mode(proj, config, task["complexity"])
     branch = _task_branch_name(task) if pr_mode else _current_branch(proj["path"])
     if pr_mode:
-        print(f"[logpose] PR mode: branch {branch}")
+        reason = "project flag"
+        if not proj["pr_workflow"]:
+            eff_c = task["complexity"] if task["complexity"] else 3
+            reason = f"complexity {eff_c} >= min_complexity {config.get('pr_workflow', {}).get('min_complexity')}"
+        print(f"[logpose] PR mode: branch {branch}  (reason: {reason})")
         _git(proj["path"], "checkout", "-b", branch)
     else:
         print(f"[logpose] Direct mode: {branch}")
@@ -852,6 +856,13 @@ def cmd_config_show(args):
     for level in range(1, 6):
         model = models.get(str(level), "(not set)")
         print(f"  {level}: {model}")
+    print()
+    pr_cfg = config.get("pr_workflow", {})
+    print("PR workflow:")
+    print(f"  min_complexity: {pr_cfg.get('min_complexity', '(not set)')}  (tasks with complexity >= this get PRs)")
+    print(f"  auto_pr:        {pr_cfg.get('auto_pr', '(not set)')}")
+    dirs = pr_cfg.get("dirs", [])
+    print(f"  dirs:           {', '.join(dirs) if dirs else '(none)'}")
 
 
 def cmd_config_pr_add(args):
@@ -871,6 +882,14 @@ def cmd_config_pr_list(args):
         return
     for path in dirs:
         print(path)
+
+
+def cmd_config_pr_min_complexity(args):
+    """Set the minimum complexity threshold for complexity-gated PRs."""
+    config = load_config()
+    config.setdefault("pr_workflow", {})["min_complexity"] = args.level
+    save_config(config)
+    print(f"PR min_complexity set to {args.level}  (tasks with complexity >= {args.level} will get PRs)")
 
 
 def cmd_config_set(args):
@@ -963,7 +982,14 @@ def _current_branch(project_path):
     return subprocess.check_output(["git", "branch", "--show-current"], cwd=project_path, text=True).strip()
 
 
-def _is_pr_mode(project, config):
+def _is_pr_mode(project, config, task_complexity=None):
+    """Determine whether to use PR workflow for this build.
+
+    PR mode is enabled when ANY of:
+    1. The project has pr_workflow=True (per-project flag)
+    2. The project path is inside a configured pr_workflow dir
+    3. The task complexity >= pr_workflow.min_complexity (complexity-gated)
+    """
     project_path = os.path.abspath(project["path"])
     if project["pr_workflow"]:
         return True
@@ -974,6 +1000,13 @@ def _is_pr_mode(project, config):
                 return True
         except ValueError:
             pass
+    # Complexity-gated PR: tasks at or above the threshold get PRs.
+    # Tasks with no explicit complexity default to 3 (matching model selection).
+    effective_complexity = task_complexity if task_complexity is not None else 3
+    min_complexity = config.get("pr_workflow", {}).get("min_complexity")
+    if min_complexity is not None:
+        if effective_complexity >= min_complexity:
+            return True
     return False
 
 # ─── Main CLI ────────────────────────────────────────────────────────────────
@@ -1154,6 +1187,9 @@ def main():
     cprrm.set_defaults(func=cmd_config_pr_remove)
     cprlist = csub.add_parser("pr-list", help="List PR workflow directories")
     cprlist.set_defaults(func=cmd_config_pr_list)
+    cprmc = csub.add_parser("pr-min-complexity", help="Set min complexity for PR creation (tasks at or above this level get PRs)")
+    cprmc.add_argument("level", type=int, choices=[1, 2, 3, 4, 5], help="Minimum complexity level (1-5)")
+    cprmc.set_defaults(func=cmd_config_pr_min_complexity)
 
     # graph
     p_graph = sub.add_parser("graph", help="Dependency graph")

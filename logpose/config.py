@@ -30,6 +30,7 @@ DEFAULT_CONFIG = {
     "pr_workflow": {
         "dirs": [],
         "auto_pr": True,
+        "min_complexity": 3,
     },
 }
 
@@ -52,8 +53,15 @@ def load_config():
             config["pr_workflow"] = dict(DEFAULT_CONFIG["pr_workflow"])
             changed = True
         else:
-            config["pr_workflow"].setdefault("dirs", [])
-            config["pr_workflow"].setdefault("auto_pr", True)
+            if "dirs" not in config["pr_workflow"]:
+                config["pr_workflow"]["dirs"] = []
+                changed = True
+            if "auto_pr" not in config["pr_workflow"]:
+                config["pr_workflow"]["auto_pr"] = True
+                changed = True
+            if "min_complexity" not in config["pr_workflow"]:
+                config["pr_workflow"]["min_complexity"] = 3
+                changed = True
         if changed:
             save_config(config)
         return config

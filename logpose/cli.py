@@ -2,10 +2,14 @@
 """logpose CLI — the log pose to your next island."""
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from logpose.opencode import _slugify
 from logpose.db import (
@@ -16,7 +20,7 @@ from logpose.db import (
     task_add_dep, task_remove_dep, task_get_deps, task_get_dependents,
     task_get_blocked, task_get_ready, get_stats,
     brain_add, brain_get, brain_list, brain_update, brain_delete, brain_tags,
-    bug_add, bug_get, bug_list, bug_update, bug_delete,
+    bug_add, bug_get, bug_get_by_source_url, bug_list, bug_update, bug_delete,
 )
 from logpose.graph import render_graph, render_graph_dot
 from logpose.config import (
@@ -930,6 +934,104 @@ def cmd_sentry_map(args):
     conn.close()
 
 
+def _fetch_sentry_issues(org, sentry_project, token):
+    query = urllib.parse.urlencode({"query": "is:unresolved"})
+    org = urllib.parse.quote(org, safe="")
+    sentry_project = urllib.parse.quote(sentry_project, safe="")
+    url = f"https://sentry.io/api/0/projects/{org}/{sentry_project}/issues/?{query}"
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(str(e.reason)) from e
+    except TimeoutError as e:
+        raise RuntimeError("timeout") from e
+
+
+def _sentry_issue_to_bug(issue):
+    title = issue.get("title") or issue.get("shortId") or "Untitled Sentry issue"
+    permalink = issue.get("permalink") or issue.get("url")
+    return {
+        "title": title,
+        "description": issue.get("culprit"),
+        "source_url": permalink,
+        "count": int(issue.get("count") or 1),
+        "first_seen": issue.get("firstSeen"),
+        "last_seen": issue.get("lastSeen"),
+        "level": issue.get("level"),
+    }
+
+
+def cmd_sentry_poll(args):
+    config = load_config()
+    sentry = config.get("sentry", {})
+    org = sentry.get("org")
+    mappings = sentry.get("projects", {})
+
+    if not mappings:
+        print("No Sentry project mappings configured")
+        return
+
+    token = os.environ.get("SENTRY_AUTH_TOKEN")
+    if not token:
+        print("ERROR: SENTRY_AUTH_TOKEN is required")
+        sys.exit(1)
+
+    if not org:
+        print("ERROR: sentry.org is required in ~/.logpose/config.json")
+        sys.exit(1)
+
+    conn = get_db()
+    created = updated = 0
+    errors = []
+
+    for sentry_project, logpose_project in mappings.items():
+        proj = project_get(conn, logpose_project)
+        if not proj:
+            errors.append(f"{sentry_project}: logpose project '{logpose_project}' not found")
+            continue
+
+        try:
+            issues = _fetch_sentry_issues(org, sentry_project, token)
+        except RuntimeError as e:
+            errors.append(f"{sentry_project}: {e}")
+            continue
+
+        for issue in issues:
+            bug = _sentry_issue_to_bug(issue)
+            if not bug["source_url"]:
+                errors.append(f"{sentry_project}: issue missing permalink")
+                continue
+
+            exists = bug_get_by_source_url(conn, bug["source_url"])
+            bug_add(conn, proj["id"], **bug)
+            if exists:
+                updated += 1
+            else:
+                created += 1
+
+    print(f"Sentry poll complete: {created} created, {updated} updated")
+    if errors:
+        print("Errors:")
+        for error in errors:
+            print(f"  {error}")
+        conn.close()
+        sys.exit(1)
+
+    conn.close()
+
+
 # ─── Utility ─────────────────────────────────────────────────────────────────
 
 def _would_cycle(conn, task_id, dep_ids):
@@ -1167,6 +1269,8 @@ def main():
     sm.add_argument("sentry_project")
     sm.add_argument("logpose_project")
     sm.set_defaults(func=cmd_sentry_map)
+    sp = ssub.add_parser("poll", help="Sync unresolved Sentry issues into bugs")
+    sp.set_defaults(func=cmd_sentry_poll)
 
     # config
     p_config = sub.add_parser("config", help="Model mapping configuration")

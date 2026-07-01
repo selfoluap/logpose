@@ -25,7 +25,8 @@ DEFAULT_CONFIG = {
         "5": "openai/gpt-5.5",
     },
     "sentry": {
-        "projects": {}
+        "org": None,
+        "projects": {},
     },
     "pr_workflow": {
         "dirs": [],
@@ -61,6 +62,16 @@ def load_config():
                 changed = True
             if "min_complexity" not in config["pr_workflow"]:
                 config["pr_workflow"]["min_complexity"] = 3
+                changed = True
+        if "sentry" not in config:
+            config["sentry"] = {"org": None, "projects": {}}
+            changed = True
+        else:
+            if "org" not in config["sentry"]:
+                config["sentry"]["org"] = None
+                changed = True
+            if "projects" not in config["sentry"]:
+                config["sentry"]["projects"] = {}
                 changed = True
         if changed:
             save_config(config)

@@ -93,7 +93,7 @@ def run_plan(task_id, task_title, task_description, project_path, plan_output_di
     binary = _check_opencode()
 
     if plan_output_dir is None:
-        plan_output_dir = os.path.join(project_path, "plans")
+        plan_output_dir = os.path.join(os.path.expanduser("~/.logpose"), "plans")
     os.makedirs(plan_output_dir, exist_ok=True)
 
     plan_filename = f"task-{task_id}-{_slugify(task_title)}.md"

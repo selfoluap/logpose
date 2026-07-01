@@ -1167,9 +1167,35 @@ def _is_pr_mode(project, config, task_complexity=None):
             return True
     return False
 
+# ─── Env loading ──────────────────────────────────────────────────────────────
+
+def _load_env(env_dir=None):
+    """Load ~/.logpose/.env into os.environ, never overwriting existing vars."""
+    env_dir = env_dir or os.path.expanduser("~/.logpose")
+    env_path = os.path.join(env_dir, ".env")
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            if not key:
+                continue
+            if key in os.environ:
+                continue
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
+                val = val[1:-1]
+            os.environ[key] = val
+
 # ─── Main CLI ────────────────────────────────────────────────────────────────
 
 def main():
+    _load_env()
     parser = argparse.ArgumentParser(
         description="logpose — Track projects, ideas, and tasks. The log pose to your next island.",
     )

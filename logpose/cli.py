@@ -67,7 +67,7 @@ def _parse_time(value):
     if value is None:
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        return float(value) / 1000
 
     from datetime import datetime
 
@@ -93,12 +93,16 @@ def _task_jsonl_path(task_id):
 
 def _files_touched(project_path, task_id):
     try:
-        commit = subprocess.check_output(
-            ["git", "log", "--grep", f"Task #{task_id}", "--format=%H", "-n", "1"],
-            cwd=project_path,
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
+        commit = ""
+        for pattern in (f"Task #{task_id}", f"#{task_id}"):
+            commit = subprocess.check_output(
+                ["git", "log", "--grep", pattern, "--format=%H", "-n", "1"],
+                cwd=project_path,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+            if commit:
+                break
         if not commit:
             return []
 
@@ -1252,12 +1256,12 @@ def cmd_ui(args):
 
     if action == "dev":
         _ensure_ui_ready(ui_dir, build=False)
-        print(f"Dashboard dev server starting. API: http://127.0.0.1:{args.port}")
+        print(f"Dashboard dev server starting. API: http://0.0.0.0:{args.port}")
         _npm(ui_dir, "run", "dev", env=env)
         return
 
     _ensure_ui_ready(ui_dir, build=True)
-    print(f"Dashboard available at http://127.0.0.1:{args.port}")
+    print(f"Dashboard available at http://0.0.0.0:{args.port}")
     _npm(ui_dir, "start", env=env)
 
 

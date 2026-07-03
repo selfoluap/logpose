@@ -5,6 +5,7 @@ import contextlib
 import json
 from io import StringIO
 import os
+import subprocess
 import tempfile
 
 from logpose import cli
@@ -151,7 +152,67 @@ def test_run_build_writes_jsonl_and_human_log():
                 os.environ["LOGPOSE_HERMES_TOKENS"] = old_tokens
 
 
+def test_task_report_numeric_opencode_timestamps_are_milliseconds():
+    with tempfile.TemporaryDirectory() as home, tempfile.NamedTemporaryFile() as dbf:
+        old_home = os.environ.get("HOME")
+        os.environ["HOME"] = home
+        try:
+            conn = get_db(dbf.name)
+            project = project_add(conn, "demo", home)
+            task = task_add(conn, project["id"], "ms timestamps")
+            conn.close()
+
+            log_dir = os.path.join(home, ".logpose", "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            with open(os.path.join(log_dir, f"task-{task['id']}-build.jsonl"), "w") as f:
+                f.write(json.dumps({"type": "step_start", "timestamp": 100000}) + "\n")
+                f.write(json.dumps({
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "bash",
+                        "time": {"start": 101000, "end": 104500},
+                    },
+                }) + "\n")
+                f.write(json.dumps({"type": "step_finish", "timestamp": 110000, "part": {"tokens": {}}}) + "\n")
+
+            old_files_touched = cli._files_touched
+            cli._files_touched = lambda project_path, task_id: []
+            try:
+                report = cli._build_report(task, home)
+            finally:
+                cli._files_touched = old_files_touched
+
+            assert report["duration_seconds"] == 10
+            assert report["tools"]["bash"]["total_seconds"] == 4
+        finally:
+            if old_home is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = old_home
+
+
+def test_files_touched_finds_plain_task_number_commit():
+    with tempfile.TemporaryDirectory() as project_dir:
+        subprocess.check_call(["git", "init"], cwd=project_dir, stdout=subprocess.DEVNULL)
+        subprocess.check_call(["git", "config", "user.email", "test@example.com"], cwd=project_dir)
+        subprocess.check_call(["git", "config", "user.name", "Test User"], cwd=project_dir)
+
+        path = os.path.join(project_dir, "changed.txt")
+        with open(path, "w") as f:
+            f.write("hello\n")
+
+        subprocess.check_call(["git", "add", "changed.txt"], cwd=project_dir)
+        subprocess.check_call(["git", "commit", "-m", "fix report #42"], cwd=project_dir, stdout=subprocess.DEVNULL)
+
+        files = cli._files_touched(project_dir, 42)
+        assert files == [
+            {"path": "changed.txt", "status": "M", "insertions": 1, "deletions": 0}
+        ]
+
+
 if __name__ == "__main__":
     test_task_report_json_structure_and_human_output()
     test_run_build_writes_jsonl_and_human_log()
+    test_task_report_numeric_opencode_timestamps_are_milliseconds()
+    test_files_touched_finds_plain_task_number_commit()
     print("all tests OK")

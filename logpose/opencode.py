@@ -56,7 +56,7 @@ def run_refine(idea_id, idea_title, idea_description, project_path, model=None):
     print(f"[logpose] Running refine for idea #{idea_id}...")
     print(f"[logpose] Project: {project_path}")
 
-    cmd = [binary, "run", "--agent", "plan", prompt]
+    cmd = [binary, "run", "--dangerously-skip-permissions", "--agent", "plan", prompt]
     if model:
         cmd.extend(["-m", model])
 
@@ -110,7 +110,7 @@ def run_plan(task_id, task_title, task_description, project_path, plan_output_di
     print(f"[logpose] Running plan for task #{task_id}...")
     print(f"[logpose] Project: {project_path}")
 
-    cmd = [binary, "run", "--agent", "plan", prompt]
+    cmd = [binary, "run", "--dangerously-skip-permissions", "--agent", "plan", prompt]
     if model:
         cmd.extend(["-m", model])
 
@@ -248,7 +248,7 @@ def run_review(task_id, task_title, task_description, project_path, plan_md_path
         f"- Verdict: APPROVED or REQUEST_CHANGES\n"
     )
 
-    cmd = [binary, "run", "--agent", "plan", review_prompt]
+    cmd = [binary, "run", "--dangerously-skip-permissions", "--agent", "plan", review_prompt]
     if plan_md_path and os.path.isfile(plan_md_path):
         cmd.extend(["-f", plan_md_path])
         print(f"[logpose] Attaching plan: {plan_md_path}")

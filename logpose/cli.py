@@ -63,6 +63,179 @@ def _print_row(row, cols=None):
         print(f"  {k}: {row[k]}")
 
 
+def _parse_time(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    from datetime import datetime
+
+    text = str(value).replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except ValueError:
+        return None
+
+
+def _event_seconds(part):
+    times = part.get("time") or {}
+    start = _parse_time(times.get("start"))
+    end = _parse_time(times.get("end"))
+    if start is None or end is None:
+        return 0
+    return max(0, round(end - start))
+
+
+def _task_jsonl_path(task_id):
+    return os.path.join(os.path.expanduser("~/.logpose"), "logs", f"task-{task_id}-build.jsonl")
+
+
+def _files_touched(project_path, task_id):
+    try:
+        commit = subprocess.check_output(
+            ["git", "log", "--grep", f"Task #{task_id}", "--format=%H", "-n", "1"],
+            cwd=project_path,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if not commit:
+            return []
+
+        out = subprocess.check_output(
+            ["git", "show", "--numstat", "--format=", commit],
+            cwd=project_path,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+
+    files = []
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3:
+            continue
+        ins, dels, path = parts
+        files.append({
+            "path": path,
+            "status": "M",
+            "insertions": 0 if ins == "-" else int(ins),
+            "deletions": 0 if dels == "-" else int(dels),
+        })
+    return files
+
+
+def _build_report(task, project_path):
+    path = _task_jsonl_path(task["id"])
+    if not os.path.isfile(path):
+        print(f"Report log not found: {path}")
+        sys.exit(1)
+
+    report = {
+        "task_id": task["id"],
+        "title": task["title"],
+        "duration_seconds": 0,
+        "steps": 0,
+        "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0,
+            "total": 0,
+            "cost": 0,
+        },
+        "tools": {},
+        "messages": [],
+        "files_touched": _files_touched(project_path, task["id"]),
+    }
+
+    first_start = None
+    last_finish = None
+    starts = 0
+    finishes = 0
+
+    with open(path) as f:
+        for line in f:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            part = event.get("part") or {}
+            event_type = event.get("type")
+            part_type = part.get("type")
+
+            if event_type == "step_start" or part_type == "step-start":
+                starts += 1
+                timestamp = _parse_time(event.get("timestamp"))
+                if first_start is None and timestamp is not None:
+                    first_start = timestamp
+            elif event_type == "step_finish" or part_type == "step-finish":
+                finishes += 1
+                timestamp = _parse_time(event.get("timestamp"))
+                if timestamp is not None:
+                    last_finish = timestamp
+                tokens = part.get("tokens") or {}
+                cache = tokens.get("cache") or {}
+                report["tokens"]["input"] += tokens.get("input", 0) or 0
+                report["tokens"]["output"] += tokens.get("output", 0) or 0
+                report["tokens"]["reasoning"] += tokens.get("reasoning", 0) or 0
+                report["tokens"]["cache_read"] += cache.get("read", 0) or 0
+                report["tokens"]["cache_write"] += cache.get("write", 0) or 0
+                report["tokens"]["total"] += tokens.get("total", 0) or 0
+                report["tokens"]["cost"] += part.get("cost", 0) or 0
+            elif event_type == "text" and part.get("text"):
+                report["messages"].append(part["text"])
+            elif event_type == "tool_use":
+                tool = part.get("tool") or "unknown"
+                entry = report["tools"].setdefault(tool, {"count": 0, "total_seconds": 0})
+                entry["count"] += 1
+                entry["total_seconds"] += _event_seconds(part)
+
+    if first_start is not None and last_finish is not None:
+        report["duration_seconds"] = max(0, round(last_finish - first_start))
+    report["steps"] = min(starts, finishes)
+    report["tokens"]["cost"] = round(report["tokens"]["cost"], 6)
+    return report
+
+
+def cmd_task_report(args):
+    conn = get_db()
+    task = task_get(conn, args.id)
+    if not task:
+        print(f"Task #{args.id} not found.")
+        sys.exit(1)
+
+    proj = project_get(conn, task["project_id"])
+    report = _build_report(task, proj["path"] if proj else ".")
+    conn.close()
+
+    if not args.human:
+        print(json.dumps(report, indent=2))
+        return
+
+    print(f"Task #{report['task_id']}: {report['title']}")
+    print(f"Duration: {report['duration_seconds']}s  Steps: {report['steps']}")
+    print()
+    print("Tokens")
+    for key, value in report["tokens"].items():
+        print(f"  {key}: {value}")
+    print()
+    print("Tools")
+    for name, data in sorted(report["tools"].items()):
+        print(f"  {name}: {data['count']} calls, {data['total_seconds']}s")
+    print()
+    print("Messages")
+    for message in report["messages"]:
+        print(f"  - {message}")
+    print()
+    print("Files touched")
+    for item in report["files_touched"]:
+        print(f"  {item['status']} {item['path']} +{item['insertions']} -{item['deletions']}")
+
+
 def cmd_init(args):
     conn = get_db()
     stats = get_stats(conn)
@@ -1349,6 +1522,10 @@ def main():
     tw = tsub.add_parser("watch", help="Tail the build log for a task")
     tw.add_argument("id", type=int)
     tw.set_defaults(func=cmd_task_watch)
+    trep = tsub.add_parser("report", help="Show structured build analytics")
+    trep.add_argument("id", type=int)
+    trep.add_argument("--human", action="store_true", help="Show formatted terminal output")
+    trep.set_defaults(func=cmd_task_report)
 
     # sentry
     p_sentry = sub.add_parser("sentry", help="Sentry integration config")

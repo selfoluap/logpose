@@ -1,5 +1,6 @@
 """OpenCode integration for logpose — spawn plan, build, refine, and review processes."""
 
+import json
 import os
 import subprocess
 import shutil
@@ -30,6 +31,22 @@ def _slugify(text):
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[-\s]+", "-", text)
     return text[:60]
+
+
+def _jsonl_log_path(task_id):
+    log_dir = os.path.join(os.path.expanduser("~/.logpose"), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, f"task-{task_id}-build.jsonl")
+
+
+def _hermes_tokens():
+    raw = os.environ.get("LOGPOSE_HERMES_TOKENS")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
 
 
 def run_refine(idea_id, idea_title, idea_description, project_path, model=None):
@@ -177,7 +194,8 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
         f"{task_description}"
     )
 
-    cmd = [binary, "run", "--dangerously-skip-permissions", prompt]
+    jsonl_path = _jsonl_log_path(task_id)
+    cmd = [binary, "run", "--dangerously-skip-permissions", "--format", "json", prompt]
     if plan_md_path and os.path.isfile(plan_md_path):
         cmd.extend(["-f", plan_md_path])
         print(f"[logpose] Attaching plan: {plan_md_path}")
@@ -187,6 +205,7 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
     print(f"[logpose] Running build for task #{task_id}...")
     print(f"[logpose] Project: {project_path}")
     print(f"[logpose] Log: {log_path}")
+    print(f"[logpose] JSONL: {jsonl_path}")
 
     proc = subprocess.Popen(
         cmd,
@@ -196,12 +215,38 @@ def run_build(task_id, task_title, task_description, project_path, plan_md_path=
         text=True,
     )
 
-    # Tee output: print each line and write to log file
-    with open(log_path, "w") as log_file:
+    tokens = _hermes_tokens()
+    with open(log_path, "w") as log_file, open(jsonl_path, "w") as jsonl_file:
+        if tokens:
+            jsonl_file.write(json.dumps({"hermes_tokens": tokens}) + "\n")
+
         for line in proc.stdout:
-            print(line, end="")
-            log_file.write(line)
-            log_file.flush()
+            jsonl_file.write(line)
+            jsonl_file.flush()
+
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                print(line, end="")
+                log_file.write(line)
+                log_file.flush()
+                continue
+
+            part = event.get("part") or {}
+            text = part.get("text")
+            if text:
+                print(text)
+                log_file.write(text + "\n")
+                log_file.flush()
+                continue
+
+            if event.get("type") == "tool_use":
+                tool = part.get("tool", "tool")
+                status = ((part.get("state") or {}).get("status") or "").strip()
+                message = f"[tool] {tool}" + (f" {status}" if status else "")
+                print(message)
+                log_file.write(message + "\n")
+                log_file.flush()
     proc.wait()
 
     if proc.returncode == 0:

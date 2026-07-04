@@ -11,6 +11,7 @@ def env_path(tmp_home):
 
 
 def test_loads_key_value():
+    old = os.environ.pop("SENTRY_AUTH_TOKEN", None)
     with tempfile.TemporaryDirectory() as tmp:
         p = env_path(tmp)
         with open(p, "w") as f:
@@ -18,6 +19,8 @@ def test_loads_key_value():
         _load_env(tmp)
         assert os.environ.get("SENTRY_AUTH_TOKEN") == "abc123"
         del os.environ["SENTRY_AUTH_TOKEN"]
+    if old is not None:
+        os.environ["SENTRY_AUTH_TOKEN"] = old
 
 
 def test_does_not_overwrite_existing():

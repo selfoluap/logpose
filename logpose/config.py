@@ -20,7 +20,7 @@ DEFAULT_CONFIG = {
         "review": "opencode-go/deepseek-v4-pro",
         "1": "opencode-go/deepseek-v4-flash",
         "2": "opencode-go/deepseek-v4-flash",
-        "3": "opencode-go/deepseek-v4-flash",
+        "3": "openai/glm-5.2",
         "4": "openai/gpt-5.4",
         "5": "openai/gpt-5.5",
     },
@@ -91,9 +91,10 @@ def save_config(config_dict):
 
 
 def get_model_for_complexity(score):
-    """Return the build model for a given complexity score (1-5).
+    """Return the build model for a given build complexity score (1-5).
 
     If score is None, fall back to model for score 3.
+    Complexity 0 is not a build complexity and must be blocked by the CLI.
     If score is out of range, clamp to 1-5.
     """
     config = load_config()

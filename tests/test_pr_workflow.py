@@ -88,6 +88,7 @@ def test_cmd_task_build_pr_mode_uses_branch_push_and_pr_create():
         orig_get_model = cli.get_model_for_complexity
         orig_git = getattr(cli, "_git", None)
         orig_branch = getattr(cli, "_current_branch", None)
+        orig_subprocess = cli.subprocess
 
         import logpose.opencode as opencode
         orig_run_build = opencode.run_build
@@ -135,6 +136,7 @@ def test_cmd_task_build_pr_mode_uses_branch_push_and_pr_create():
                 cli._git = orig_git
             if orig_branch is not None:
                 cli._current_branch = orig_branch
+            cli.subprocess = orig_subprocess
             opencode.run_build = orig_run_build
 
 
@@ -151,6 +153,7 @@ def test_cmd_task_build_direct_mode_pushes_current_branch_only():
         orig_get_model = cli.get_model_for_complexity
         orig_git = getattr(cli, "_git", None)
         orig_branch = getattr(cli, "_current_branch", None)
+        orig_subprocess = cli.subprocess
 
         import logpose.opencode as opencode
         orig_run_build = opencode.run_build
@@ -198,6 +201,7 @@ def test_cmd_task_build_direct_mode_pushes_current_branch_only():
                 cli._git = orig_git
             if orig_branch is not None:
                 cli._current_branch = orig_branch
+            cli.subprocess = orig_subprocess
             opencode.run_build = orig_run_build
 
 

@@ -68,6 +68,9 @@ lg bug promote <id> [-c 1-5]                           Convert bug → task
 lg bug rm <id>                                         Remove a bug
 
 lg sentry map <sentry_project> <logpose_project>        Map Sentry project slug to logpose project
+lg sentry poll                                           Sync unresolved Sentry issues into bugs
+lg sentry resolve <bug_id>                               Resolve the bug's Sentry issue
+lg sentry unresolve <bug_id>                             Reopen the bug's Sentry issue
 
 lg config show                     Show complexity → model mapping
 lg config set <1-5> <model>        Set model for a complexity level

@@ -1137,6 +1137,43 @@ def _fetch_sentry_issues(org, sentry_project, token):
         raise RuntimeError("timeout") from e
 
 
+def _sentry_issue_id(source_url):
+    if not source_url:
+        raise RuntimeError("bug has no source_url")
+    match = re.search(r"/issues/(\d+)/?", source_url)
+    if not match:
+        raise RuntimeError("source_url is not a Sentry issue URL")
+    return match.group(1)
+
+
+def _put_sentry_issue_status(org, issue_id, token, status):
+    org = urllib.parse.quote(org, safe="")
+    issue_id = urllib.parse.quote(issue_id, safe="")
+    url = f"https://sentry.io/api/0/organizations/{org}/issues/{issue_id}/"
+    data = json.dumps({"status": status}).encode("utf-8")
+
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method="PUT",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(str(e.reason)) from e
+    except TimeoutError as e:
+        raise RuntimeError("timeout") from e
+
+
 def _sentry_issue_to_bug(issue):
     title = issue.get("title") or issue.get("shortId") or "Untitled Sentry issue"
     permalink = issue.get("permalink") or issue.get("url")
@@ -1149,6 +1186,37 @@ def _sentry_issue_to_bug(issue):
         "last_seen": issue.get("lastSeen"),
         "level": issue.get("level"),
     }
+
+
+def cmd_sentry_issue_status(args):
+    token = os.environ.get("SENTRY_AUTH_TOKEN")
+    if not token:
+        print("ERROR: SENTRY_AUTH_TOKEN is required")
+        sys.exit(1)
+
+    org = (load_config().get("sentry") or {}).get("org")
+    if not org:
+        print("ERROR: sentry.org is required in ~/.logpose/config.json")
+        sys.exit(1)
+
+    conn = get_db()
+    bug = bug_get(conn, args.id)
+    if not bug:
+        conn.close()
+        print(f"Bug #{args.id} not found.")
+        sys.exit(1)
+
+    try:
+        issue_id = _sentry_issue_id(bug["source_url"])
+        _put_sentry_issue_status(org, issue_id, token, args.sentry_status)
+    except RuntimeError as e:
+        conn.close()
+        print(f"ERROR: {e}")
+        sys.exit(1)
+
+    conn.close()
+    verb = "Resolved" if args.sentry_status == "resolved" else "Unresolved"
+    print(f"{verb} Sentry issue #{issue_id} ({bug['title']})")
 
 
 def cmd_sentry_poll(args):
@@ -1540,6 +1608,12 @@ def main():
     sm.set_defaults(func=cmd_sentry_map)
     sp = ssub.add_parser("poll", help="Sync unresolved Sentry issues into bugs")
     sp.set_defaults(func=cmd_sentry_poll)
+    sr = ssub.add_parser("resolve", help="Resolve a Sentry issue for a bug")
+    sr.add_argument("id", type=int)
+    sr.set_defaults(func=cmd_sentry_issue_status, sentry_status="resolved")
+    su = ssub.add_parser("unresolve", help="Reopen a Sentry issue for a bug")
+    su.add_argument("id", type=int)
+    su.set_defaults(func=cmd_sentry_issue_status, sentry_status="unresolved")
 
     # config
     p_config = sub.add_parser("config", help="Model mapping configuration")

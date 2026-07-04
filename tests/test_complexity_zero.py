@@ -3,6 +3,8 @@
 import argparse
 import contextlib
 from io import StringIO
+from pathlib import Path
+import sys
 import tempfile
 
 from logpose import cli
@@ -10,6 +12,85 @@ from logpose import db as db_mod
 from logpose import config as config_mod
 from logpose.config import get_model_for_complexity
 from logpose.db import get_db, project_add, task_add
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_agents_complexity_table_columns_match():
+    lines = (ROOT / "AGENTS.md").read_text().splitlines()
+    header_index = lines.index("| Complexity | Default Model / Method | Use Case |")
+
+    assert lines[header_index + 1] == "|---|---|---|"
+
+
+def test_skill_current_defaults_lists_c0_direct_patch_rule():
+    text = (ROOT / "skills" / "SKILL.md").read_text()
+
+    assert "| 0 (mechanical) | no build model | Hermes direct patch + verification only |" in text
+
+
+def test_argparse_accepts_c0_for_add_refine_and_promote():
+    calls = []
+    originals = {
+        "cmd_idea_add": cli.cmd_idea_add,
+        "cmd_idea_refine": cli.cmd_idea_refine,
+        "cmd_bug_promote": cli.cmd_bug_promote,
+        "cmd_task_add": cli.cmd_task_add,
+    }
+    orig_argv = sys.argv
+    try:
+        cli.cmd_idea_add = lambda args: calls.append(("idea_add", args.complexity))
+        cli.cmd_idea_refine = lambda args: calls.append(("idea_refine", args.complexity))
+        cli.cmd_bug_promote = lambda args: calls.append(("bug_promote", args.complexity))
+        cli.cmd_task_add = lambda args: calls.append(("task_add", args.complexity))
+
+        for argv in (
+            ["lg", "idea", "add", "demo", "Typo", "-c", "0"],
+            ["lg", "idea", "refine", "1", "-c", "0"],
+            ["lg", "bug", "promote", "1", "-c", "0"],
+            ["lg", "task", "add", "demo", "Typo", "-c", "0"],
+        ):
+            sys.argv = argv
+            cli.main()
+
+        assert calls == [
+            ("idea_add", 0),
+            ("idea_refine", 0),
+            ("bug_promote", 0),
+            ("task_add", 0),
+        ]
+    finally:
+        for name, fn in originals.items():
+            setattr(cli, name, fn)
+        sys.argv = orig_argv
+
+
+def test_c0_task_add_list_and_show_display_complexity_zero():
+    with tempfile.NamedTemporaryFile() as f:
+        conn = get_db(f.name)
+        project_add(conn, "demo", "/tmp/demo")
+        conn.close()
+
+        orig_get_db = cli.get_db
+        try:
+            cli.get_db = lambda: db_mod.get_db(f.name)
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                cli.cmd_task_add(argparse.Namespace(project="demo", title="Typo fix", description="", complexity=0))
+            assert "(complexity: 0)" in out.getvalue()
+
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                cli.cmd_task_list(argparse.Namespace(project=None, status=None, all=False))
+            assert "C:0" in out.getvalue()
+
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                cli.cmd_task_show(argparse.Namespace(id=1))
+            assert "complexity: 0" in out.getvalue()
+        finally:
+            cli.get_db = orig_get_db
 
 
 def test_c0_can_be_marked_done_without_build_log():

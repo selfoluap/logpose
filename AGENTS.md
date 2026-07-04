@@ -100,7 +100,7 @@ lg blocked [project]              Show blocked tasks (deps not done)
 ## Complexity → Model Mapping
 
 | Complexity | Default Model / Method | Use Case |
-|---|---|
+|---|---|---|
 | 0 | Hermes direct patch, then verify | Mechanical-only edits: version bumps, dependency/package version changes, changelog-only edits, typo fixes, config value changes, generated metadata sync |
 | 1 | DeepSeek V4 Flash | Trivial but non-mechanical changes; must use plan/build |
 | 2 | DeepSeek V4 Flash | Simple features, small bug fixes |

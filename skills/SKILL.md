@@ -65,6 +65,7 @@ Current defaults:
 | refine | opencode-go/deepseek-v4-flash | Cheap, good instruction following |
 | plan | openai/gpt-5.5 | Best reasoning, reads codebases |
 | review | opencode-go/deepseek-v4-pro | Attention to detail, checklist review |
+| 0 (mechanical) | no build model | Hermes direct patch + verification only |
 | 1 (trivial) | opencode-go/deepseek-v4-flash | Follows plans well |
 | 2 (simple) | opencode-go/deepseek-v4-flash | Follows plans well |
 | 3 (standard) | openai/glm-5.2 | Standard implementation |

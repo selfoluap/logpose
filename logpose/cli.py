@@ -1306,6 +1306,24 @@ def _find_ui_dir():
     sys.exit(1)
 
 
+def _get_tailscale_ip():
+    """Get the Tailscale IP address if available."""
+    try:
+        result = subprocess.run(
+            ["tailscale", "ip", "-4"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0:
+            ip = result.stdout.strip()
+            if ip:
+                return ip
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    return None
+
+
 def _npm(ui_dir, *args, env=None):
     subprocess.check_call(["npm", *args], cwd=ui_dir, env=env)
 
@@ -1324,6 +1342,10 @@ def cmd_ui(args):
     ui_dir = _find_ui_dir()
     env = os.environ.copy()
     env["PORT"] = str(args.port)
+    env["HOST"] = "0.0.0.0"
+
+    tailscale_ip = _get_tailscale_ip()
+    tailscale_msg = f" (Tailscale: http://{tailscale_ip}:{args.port})" if tailscale_ip else ""
 
     if action == "build":
         _ensure_ui_ready(ui_dir, build=False)
@@ -1333,12 +1355,12 @@ def cmd_ui(args):
 
     if action == "dev":
         _ensure_ui_ready(ui_dir, build=False)
-        print(f"Dashboard dev server starting. API: http://0.0.0.0:{args.port}")
+        print(f"Dashboard dev server starting. API: http://0.0.0.0:{args.port}{tailscale_msg}")
         _npm(ui_dir, "run", "dev", env=env)
         return
 
     _ensure_ui_ready(ui_dir, build=True)
-    print(f"Dashboard available at http://0.0.0.0:{args.port}")
+    print(f"Dashboard available at http://0.0.0.0:{args.port}{tailscale_msg}")
     _npm(ui_dir, "start", env=env)
 
 

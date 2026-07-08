@@ -45,4 +45,29 @@ describe("dashboard views", () => {
     expect(brainHtml).toContain("All tags");
     expect(brainHtml).toContain("ops");
   });
+
+  it("hides converted ideas from list", () => {
+    const html = renderToStaticMarkup(
+      <IdeasList
+        ideas={[
+          { id: 1, projectId: 1, projectName: "alpha", title: "New one", description: null, refinedDescription: null, status: "new", createdAt: "", updatedAt: "", complexity: null },
+          { id: 2, projectId: 1, projectName: "alpha", title: "Refined one", description: null, refinedDescription: null, status: "refined", createdAt: "", updatedAt: "", complexity: 2 },
+          { id: 3, projectId: 1, projectName: "alpha", title: "Done one", description: null, refinedDescription: null, status: "converted", createdAt: "", updatedAt: "", complexity: null }
+        ]}
+      />
+    );
+
+    expect(html).toContain("New one");
+    expect(html).toContain("Refined one");
+    expect(html).not.toContain("Done one");
+  });
+
+  it("renders nothing when all ideas are converted", () => {
+    const html = renderToStaticMarkup(
+      <IdeasList ideas={[{ id: 1, projectId: 1, projectName: "alpha", title: "Done", description: null, refinedDescription: null, status: "converted", createdAt: "", updatedAt: "", complexity: null }]} />
+    );
+
+    expect(html).not.toContain("Done");
+    expect(html).not.toContain("alpha");
+  });
 });

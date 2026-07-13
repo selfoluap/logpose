@@ -6,7 +6,7 @@ import { Dashboard } from "./components/Dashboard";
 import { IdeasList } from "./components/IdeasList";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { Sidebar } from "./components/Sidebar";
-import type { BrainIdea, Idea, Project, StatusSummary, Task } from "./types";
+import type { ActivityBucket, BrainIdea, Idea, Project, StatusSummary, Task } from "./types";
 
 const views = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -21,16 +21,18 @@ export default function App() {
   const [view, setView] = useState<View>("dashboard");
   const [status, setStatus] = useState<StatusSummary | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [activity, setActivity] = useState<ActivityBucket[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [brain, setBrain] = useState<BrainIdea[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.status(), api.projects(), api.tasks(), api.ideas(), api.brain()])
-      .then(([nextStatus, nextProjects, nextTasks, nextIdeas, nextBrain]) => {
+    Promise.all([api.status(), api.projects(), api.activity(), api.tasks(), api.ideas(), api.brain()])
+      .then(([nextStatus, nextProjects, nextActivity, nextTasks, nextIdeas, nextBrain]) => {
         setStatus(nextStatus);
         setProjects(nextProjects);
+        setActivity(nextActivity);
         setTasks(nextTasks);
         setIdeas(nextIdeas);
         setBrain(nextBrain);
@@ -51,7 +53,7 @@ export default function App() {
           </div>
         </div>
         {error ? <div className="panel p-4 text-sm text-red-300">{error}</div> : null}
-        {!error && view === "dashboard" ? <Dashboard status={status} projects={projects} /> : null}
+        {!error && view === "dashboard" ? <Dashboard status={status} projects={projects} activity={activity} /> : null}
         {!error && view === "tasks" ? <KanbanBoard tasks={tasks} projects={projects} /> : null}
         {!error && view === "ideas" ? <IdeasList ideas={ideas} /> : null}
         {!error && view === "brain" ? <BrainList brain={brain} /> : null}

@@ -1,15 +1,17 @@
-import type { Project, StatusSummary } from "../types";
+import { ActivityTimeline } from "./ActivityTimeline";
+import type { ActivityBucket, Project, StatusSummary } from "../types";
 
 type Props = {
   status: StatusSummary | null;
   projects: Project[];
+  activity: ActivityBucket[];
 };
 
 function total(counts: Record<string, number>) {
   return Object.values(counts).reduce((sum, count) => sum + count, 0);
 }
 
-export function Dashboard({ status, projects }: Props) {
+export function Dashboard({ status, projects, activity }: Props) {
   if (!status) {
     return <div className="panel p-4 text-sm text-[var(--muted)]">Loading...</div>;
   }
@@ -20,6 +22,7 @@ export function Dashboard({ status, projects }: Props) {
       <Stat label="Tasks" value={total(status.tasks)} />
       <Stat label="Ideas" value={total(status.ideas)} />
       <Stat label="Brain Ideas" value={total(status.brain)} />
+      <ActivityTimeline buckets={activity} />
       <div className="panel p-4 lg:col-span-2">
         <h2 className="mb-3 text-sm font-medium">Tasks by status</h2>
         <Breakdown counts={status.tasks} />

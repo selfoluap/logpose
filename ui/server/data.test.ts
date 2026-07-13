@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapBrain, mapBugs, mapIdeas, mapProjects, mapTasks, summarizeStatus } from "./data.js";
+import { mapActivity, mapBrain, mapBugs, mapIdeas, mapProjects, mapTasks, summarizeStatus } from "./data.js";
 
 describe("server data shaping", () => {
   it("summarizes counts by status", () => {
@@ -59,5 +59,36 @@ describe("server data shaping", () => {
     expect(
       mapBugs([{ id: 1, projectId: 1, projectName: "alpha", taskId: null, title: "Bug", description: null, level: "error", status: "new", count: 1, createdAt: 2, updatedAt: 2 }])[0].createdAt
     ).toBe(iso);
+  });
+
+  it("groups completed task activity by done day and project", () => {
+    expect(
+      mapActivity(
+        [
+          { id: 1, projectId: 10, projectName: "alpha", title: "Ship graph", updatedAt: 86400 },
+          { id: 2, projectId: 10, projectName: "alpha", title: "Add drilldown", updatedAt: 86460 },
+          { id: 3, projectId: 20, projectName: "beta", title: "Fix bug", updatedAt: 172800 }
+        ],
+        new Map([[1, 90]])
+      )
+    ).toEqual([
+      {
+        date: "1970-01-02",
+        projectId: 10,
+        projectName: "alpha",
+        count: 2,
+        tasks: [
+          { id: 1, title: "Ship graph", doneAt: "1970-01-02T00:00:00.000Z", durationSeconds: 90 },
+          { id: 2, title: "Add drilldown", doneAt: "1970-01-02T00:01:00.000Z", durationSeconds: null }
+        ]
+      },
+      {
+        date: "1970-01-03",
+        projectId: 20,
+        projectName: "beta",
+        count: 1,
+        tasks: [{ id: 3, title: "Fix bug", doneAt: "1970-01-03T00:00:00.000Z", durationSeconds: null }]
+      }
+    ]);
   });
 });

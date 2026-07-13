@@ -63,3 +63,36 @@ export function mapBrain(rows: Array<Row & { createdAt: unknown; updatedAt: unkn
 export function mapBugs(rows: Array<Row & { createdAt: unknown; updatedAt: unknown }>) {
   return mapTimes(rows);
 }
+
+type ActivityRow = Row & {
+  id: unknown;
+  projectId: unknown;
+  projectName: string;
+  title: string;
+  updatedAt: unknown;
+};
+
+export function mapActivity(rows: ActivityRow[], durations: Map<number, number>) {
+  const buckets = new Map<string, {
+    date: string;
+    projectId: number;
+    projectName: string;
+    count: number;
+    tasks: Array<{ id: number; title: string; doneAt: string; durationSeconds: number | null }>;
+  }>();
+
+  for (const row of rows) {
+    const id = Number(row.id);
+    const projectId = Number(row.projectId);
+    const doneAt = toIso(row.updatedAt);
+    const date = doneAt.slice(0, 10);
+    const key = `${date}:${projectId}`;
+    const bucket = buckets.get(key) ?? { date, projectId, projectName: row.projectName, count: 0, tasks: [] };
+
+    bucket.count += 1;
+    bucket.tasks.push({ id, title: row.title, doneAt, durationSeconds: durations.get(id) ?? null });
+    buckets.set(key, bucket);
+  }
+
+  return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date) || a.projectName.localeCompare(b.projectName));
+}

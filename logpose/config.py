@@ -90,13 +90,16 @@ def save_config(config_dict):
         f.write("\n")
 
 
-def get_model_for_complexity(score):
+def get_model_for_complexity(score, override=None):
     """Return the build model for a given build complexity score (1-5).
 
+    If override is provided, returns override directly (per-run override).
     If score is None, fall back to model for score 3.
     Complexity 0 is not a build complexity and must be blocked by the CLI.
     If score is out of range, clamp to 1-5.
     """
+    if override is not None:
+        return override
     config = load_config()
     models = config["models"]
     if score is None:
@@ -105,11 +108,14 @@ def get_model_for_complexity(score):
     return models.get(str(score), DEFAULT_CONFIG["models"].get(str(score), "opencode-go/deepseek-v4-flash"))
 
 
-def get_model_for_role(role):
+def get_model_for_role(role, override=None):
     """Return the model for a pipeline role: 'refine', 'plan', or 'review'.
 
+    If override is provided, returns override directly (per-run override).
     Falls back to defaults if the role key is missing from config.
     """
+    if override is not None:
+        return override
     config = load_config()
     models = config.get("models", {})
     if role in models:

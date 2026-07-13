@@ -38,6 +38,7 @@ lg idea add <project> <title> [-d desc] [-c 0-5]   Add an idea
 lg idea list [project] [-s status] [--all]            List ideas (open only by default; --all shows all)
 lg idea show <id>                                    Show idea details
 lg idea refine <id> [-d refined_desc] [-c 0-5]      Mark idea as refined
+lg idea refine-ai <id> [--model <model>]            Use opencode (AI) to refine an idea
 lg idea convert <id>                                  Convert idea → task
 lg idea rm <id>                                      Remove an idea
 
@@ -52,8 +53,9 @@ lg brain rm <id>                                     Remove a brain idea
 lg task add <project> <title> [-d desc] [-c 0-5]   Add a task
 lg task list [project] [-s status] [--all]            List tasks (open only by default; --all shows all)
 lg task show <id>                                    Show task with dependencies + log path
-lg task plan <id>                                    Run opencode plan agent
-lg task build <id> [--force]                          Run opencode build agent
+lg task plan <id> [--model <model>]                  Run opencode plan agent
+lg task build <id> [--force] [--model <model>]        Run opencode build agent
+lg task review <id> [--model <model>]                Run opencode review agent
 lg task watch <id>                                    Tail the build log in real-time
 lg task status <id> <status>                          Update task status
 lg task deps <id> [dep_id...]                         Set dependencies

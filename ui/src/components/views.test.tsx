@@ -11,11 +11,15 @@ describe("dashboard views", () => {
       <Dashboard
         status={{ projects: 2, tasks: { pending: 1, done: 2 }, ideas: { new: 3 }, brain: { exploring: 4 }, bugs: { error: 1 } }}
         projects={[{ id: 1, name: "alpha", path: "/tmp/a", agentsMdPath: null, createdAt: "", updatedAt: "", taskCount: 2, ideaCount: 1 }]}
+        activity={[{ date: "2026-01-02", projectId: 1, projectName: "alpha", count: 1, tasks: [{ id: 7, title: "Done task", doneAt: "2026-01-02T00:00:00.000Z", durationSeconds: 120 }] }]}
       />
     );
 
     expect(html).toContain("Projects");
     expect(html).toContain("Brain Ideas");
+    expect(html).toContain("Completed task activity");
+    expect(html).toContain("#7 Done task");
+    expect(html).toContain("2m");
     expect(html).toContain("alpha");
   });
 

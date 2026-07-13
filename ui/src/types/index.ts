@@ -35,6 +35,19 @@ export type Task = {
   dependsOn: number[];
 };
 
+export type ActivityBucket = {
+  date: string;
+  projectId: number;
+  projectName: string;
+  count: number;
+  tasks: Array<{
+    id: number;
+    title: string;
+    doneAt: string;
+    durationSeconds: number | null;
+  }>;
+};
+
 export type Idea = {
   id: number;
   projectId: number;

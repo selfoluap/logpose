@@ -111,19 +111,22 @@ def test_cmd_task_build_pr_mode_uses_branch_push_and_pr_create():
             db_mod.DEFAULT_DB_PATH = f.name
             cli.get_db = lambda: db_mod.get_db(f.name)
             cli.load_config = lambda: {"pr_workflow": {"dirs": [], "auto_pr": True}}
-            cli.get_model_for_complexity = lambda complexity: "test-model"
+            cli.get_model_for_complexity = lambda complexity, override=None: override or "test-model"
             cli._git = fake_git
             cli._current_branch = lambda project_path: "main"
             cli.subprocess = FakeSubprocess
             opencode.run_build = fake_run_build
 
-            args = argparse.Namespace(id=task["id"], force=False)
+            args = argparse.Namespace(id=task["id"], force=False, model=None)
             captured = StringIO()
             with contextlib.redirect_stdout(captured):
                 cli.cmd_task_build(args)
 
             output = captured.getvalue()
             assert "[logpose] PR mode: branch task-1-fix-login" in output
+            assert ("/tmp/demo", ("checkout", "-b", "task-1-fix-login")) in git_calls
+            assert ("/tmp/demo", ("push", "-u", "origin", "task-1-fix-login")) in git_calls
+            assert (("gh", "pr", "create", "--fill"), "/tmp/demo") in subprocess_calls
             assert ("/tmp/demo", ("checkout", "-b", "task-1-fix-login")) in git_calls
             assert ("/tmp/demo", ("push", "-u", "origin", "task-1-fix-login")) in git_calls
             assert (("gh", "pr", "create", "--fill"), "/tmp/demo") in subprocess_calls
@@ -176,13 +179,13 @@ def test_cmd_task_build_direct_mode_pushes_current_branch_only():
             db_mod.DEFAULT_DB_PATH = f.name
             cli.get_db = lambda: db_mod.get_db(f.name)
             cli.load_config = lambda: {"pr_workflow": {"dirs": [], "auto_pr": True}}
-            cli.get_model_for_complexity = lambda complexity: "test-model"
+            cli.get_model_for_complexity = lambda complexity, override=None: override or "test-model"
             cli._git = fake_git
             cli._current_branch = lambda project_path: "main"
             cli.subprocess = FakeSubprocess
             opencode.run_build = fake_run_build
 
-            args = argparse.Namespace(id=task["id"], force=False)
+            args = argparse.Namespace(id=task["id"], force=False, model=None)
             captured = StringIO()
             with contextlib.redirect_stdout(captured):
                 cli.cmd_task_build(args)

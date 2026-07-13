@@ -408,7 +408,7 @@ def cmd_idea_refine_ai(args):
         sys.exit(1)
 
     proj = project_get(conn, idea["project_id"])
-    model = get_model_for_role("refine")
+    model = get_model_for_role("refine", override=args.model)
     print(f"[logpose] Model: {model} (role: refine)")
 
     from logpose.opencode import run_refine
@@ -618,7 +618,7 @@ def cmd_task_plan(args):
         sys.exit(1)
 
     proj = project_get(conn, task["project_id"])
-    model = get_model_for_role("plan")
+    model = get_model_for_role("plan", override=args.model)
     print(f"[logpose] Model: {model} (role: plan)")
 
     from logpose.opencode import run_plan
@@ -664,7 +664,7 @@ def cmd_task_build(args):
     proj = project_get(conn, task["project_id"])
     config = load_config()
 
-    model = get_model_for_complexity(task["complexity"])
+    model = get_model_for_complexity(task["complexity"], override=args.model)
     complexity_label = task["complexity"] if task["complexity"] is not None else "default(3)"
     print(f"[logpose] Model: {model} (complexity: {complexity_label})")
 
@@ -721,7 +721,7 @@ def cmd_task_review(args):
         sys.exit(1)
 
     proj = project_get(conn, task["project_id"])
-    model = get_model_for_role("review")
+    model = get_model_for_role("review", override=args.model)
     print(f"[logpose] Model: {model} (role: review)")
 
     from logpose.opencode import run_review
@@ -1470,8 +1470,8 @@ def _load_env(env_dir=None):
 
 # ─── Main CLI ────────────────────────────────────────────────────────────────
 
-def main():
-    _load_env()
+def _build_parser():
+    """Build and return the argument parser. Extracted for testing."""
     parser = argparse.ArgumentParser(
         description="logpose — Track projects, ideas, and tasks. The log pose to your next island.",
     )
@@ -1532,6 +1532,7 @@ def main():
     ir.set_defaults(func=cmd_idea_refine)
     ira = isub.add_parser("refine-ai", help="Refine idea using opencode (AI)")
     ira.add_argument("id", type=int)
+    ira.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     ira.set_defaults(func=cmd_idea_refine_ai)
     ic = isub.add_parser("convert", help="Convert idea to task")
     ic.add_argument("id", type=int)
@@ -1598,13 +1599,16 @@ def main():
     ts.set_defaults(func=cmd_task_show)
     tp = tsub.add_parser("plan", help="Run opencode plan agent for this task")
     tp.add_argument("id", type=int)
+    tp.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     tp.set_defaults(func=cmd_task_plan)
     tb = tsub.add_parser("build", help="Run opencode build for this task")
     tb.add_argument("id", type=int)
     tb.add_argument("--force", action="store_true", help="Build even if deps aren't done")
+    tb.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     tb.set_defaults(func=cmd_task_build)
     trv = tsub.add_parser("review", help="Run opencode review agent for this task")
     trv.add_argument("id", type=int)
+    trv.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     trv.set_defaults(func=cmd_task_review)
     tst = tsub.add_parser("status", help="Update task status")
     tst.add_argument("id", type=int)
@@ -1713,6 +1717,12 @@ def main():
     brm.add_argument("id", type=int)
     brm.set_defaults(func=cmd_brain_rm)
 
+    return parser
+
+
+def main():
+    _load_env()
+    parser = _build_parser()
     args = parser.parse_args()
 
     if not hasattr(args, "func"):

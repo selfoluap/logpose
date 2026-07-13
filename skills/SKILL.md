@@ -24,6 +24,8 @@ logpose is a CLI ticket system for tracking projects, ideas, and tasks with depe
 
 ## The Pipeline: IDEA → REFINE → CONVERT → PLAN → BUILD → REVIEW
 
+Exception: Complexity 0 is a narrow mechanical-change bypass. C0 may be patched directly by Hermes and verified without `lg task build`. Use only for version bumps, dependency/package version changes, changelog-only edits, typo fixes, config value changes, or generated metadata sync. Anything with logic, behavior, tests, architecture, or uncertainty is C1-C5 and must use plan/build.
+
 Each stage uses a different model optimized for that role:
 
 ```
@@ -63,9 +65,10 @@ Current defaults:
 | refine | opencode-go/deepseek-v4-flash | Cheap, good instruction following |
 | plan | openai/gpt-5.5 | Best reasoning, reads codebases |
 | review | opencode-go/deepseek-v4-pro | Attention to detail, checklist review |
+| 0 (mechanical) | no build model | Hermes direct patch + verification only |
 | 1 (trivial) | opencode-go/deepseek-v4-flash | Follows plans well |
 | 2 (simple) | opencode-go/deepseek-v4-flash | Follows plans well |
-| 3 (standard) | opencode-go/deepseek-v4-flash | With a good plan, cheap suffices |
+| 3 (standard) | openai/glm-5.2 | Standard implementation |
 | 4 (complex) | openai/gpt-5.4 | Needs stronger reasoning |
 | 5 (very complex) | openai/gpt-5.5 | Frontier for hardest tasks |
 
@@ -88,6 +91,7 @@ Tell the user what task you activated and that you're proceeding. One sentence.
 Use the method matching complexity:
 | Complexity | Method |
 |---|---|
+| C:0 | Hermes may apply a direct mechanical patch, run verification, then `lg task status <id> done`. No build model. |
 | C:1–5 | `lg task build <id>` — opencode runs with `--dangerously-skip-permissions`, reads the plan, implements, runs tests, commits. |
 | Any | After build completes, verify output compiles. If opencode produced broken code, fix with `delegate_task` subagents or direct tools, then re-verify. |
 
@@ -101,7 +105,7 @@ Before every tool call that touches a project's files (read_file, search_files, 
 > If no to either part, STOP and fix it before the tool call goes out.
 
 > **Q2: "Am I about to write implementation code?"**
-> If yes — STOP and call `lg task build <id>` instead. The logpose binary will refuse to mark the task done without a build log. You CANNOT bypass this by ignoring instructions — only `--force` works, and the user can see it.
+> If yes — STOP and call `lg task build <id>` instead, unless this is an explicit C0 mechanical patch. The logpose binary refuses to mark C1-C5 tasks done without a build log. You CANNOT bypass this by ignoring instructions — only `--force` works, and the user can see it.
 
 If the answer is no to either part, STOP and fix it before the tool call goes out.
 
@@ -114,10 +118,10 @@ lg project list                   # List all projects
 lg project show <name>            # Show project with ideas/tasks
 lg project rm <name>              # Remove project and all its ideas/tasks
 
-lg idea add <project> <title> [-d desc] [-c 1-5]   # Capture an idea
+lg idea add <project> <title> [-d desc] [-c 0-5]   # Capture an idea
 lg idea list [project] [-s status]                  # List ideas
 lg idea show <id>                                   # Show idea details
-lg idea refine <id> [-d desc] [-c 1-5]             # Manually mark as refined
+lg idea refine <id> [-d desc] [-c 0-5]             # Manually mark as refined
 lg idea refine-ai <id>                              # AI refinement (uses refine model)
 lg idea convert <id>                                # Convert idea → task
 lg idea rm <id>                                     # Remove an idea
@@ -130,7 +134,7 @@ lg brain status <id> <status>                       # Set status (new/exploring/
 lg brain tags                                       # List all tags with counts
 lg brain rm <id>                                    # Remove a brain idea
 
-lg task add <project> <title> [-d desc] [-c 1-5]   # Add a task
+lg task add <project> <title> [-d desc] [-c 0-5]   # Add a task
 lg task list [project] [-s status]                  # List tasks
 lg task show <id>                                   # Show task with deps + log path
 lg task plan <id>                                   # Run opencode plan agent (uses plan model)
@@ -146,7 +150,7 @@ lg bug add <project> <title> [-d desc] [--source-url url] [--count n] [--first-s
 lg bug list [project] [-s new|confirmed|promoted]     # List bugs
 lg bug show <id>                                       # Show bug details
 lg bug status <id> <new|confirmed|promoted>             # Update bug status
-lg bug promote <id> [-c 1-5]                           # Convert bug → task (enters pipeline)
+lg bug promote <id> [-c 0-5]                           # Convert bug → task (enters pipeline)
 lg bug rm <id>                                         # Remove a bug
 
 lg sentry map <sentry_project> <logpose_project>       # Map Sentry project slug to logpose project
@@ -215,8 +219,8 @@ The plan is saved to `<project>/plans/task-<id>-<slug>.md` and the task status i
 
 ### 5. Build (uses BUILD model — varies by complexity) — THE ONLY WAY
 
-> **🚨 HARD GATE: Build log required to mark done.**
-> `lg task status <id> done` now refuses if no build log exists. This is enforced in the logpose binary itself — there is no way around this by ignoring skill instructions. You MUST use `lg task build <id>` for ALL code implementation. The only bypass is `--force`, which the user can see in their terminal.
+> **🚨 HARD GATE: Build log required to mark done for C1-C5.**
+> `lg task status <id> done` refuses if no build log exists for C1-C5 tasks. C0 is the only explicit exception, and still requires verification after the direct mechanical patch.
 
 > **🚨 STOP: No direct file access for code writing — ever.**
 > `write_file`, `patch`, `terminal` (for code edits), and `delegate_task` subagents are FORBIDDEN for writing implementation code. They are only allowed for:
@@ -241,7 +245,9 @@ cd <project> && npx vite build     # Production build
 Always verify the build compiles cleanly. If the opencode build produces broken code, you MAY fix it with direct tools (`patch`/`write_file`) or `delegate_task` subagents — but ONLY after `lg task build` ran and created a log. Then re-verify.
 
 The build model is selected based on the task's complexity score:
-- 1-3 (trivial/standard): DeepSeek V4 Flash — cheap, fast, follows plans well
+- 0 (mechanical): no build model — direct patch + verification only
+- 1-2 (trivial/simple): DeepSeek V4 Flash — cheap, fast, follows plans well
+- 3 (standard): GLM-5.2 — standard implementation model
 - 4 (complex): GPT-5.4 — needs stronger reasoning
 - 5 (very complex): GPT-5.5 — frontier model for hardest tasks
 
@@ -313,17 +319,18 @@ When the user says "run the pipeline" or "process all ideas":
 
 ## Complexity & Model Selection
 
-Build model is selected based on the task's complexity score (1-5):
+Build model is selected based on the task's complexity score (0-5):
 
 | Complexity | Default Model | Use Case |
 |---|---|---|
-| 1 | DeepSeek V4 Flash | Trivial changes, one-liners, config tweaks |
+| 0 | no build model | Mechanical changes only; direct patch + verification |
+| 1 | DeepSeek V4 Flash | Trivial but non-mechanical changes |
 | 2 | DeepSeek V4 Flash | Simple features, small bug fixes |
-| 3 | DeepSeek V4 Flash | Standard features — with a good plan, cheap suffices |
+| 3 | GLM-5.2 | Standard implementation |
 | 4 | GPT-5.4 | Complex — needs stronger reasoning |
 | 5 | GPT-5.5 | Very complex — architecture changes, multi-system |
 
-Set when adding: `-c 1-5`. Complexity is copied from idea to task on convert.
+Set when adding: `-c 0-5`. Use `-c 0` only for narrow mechanical changes. Complexity is copied from idea to task on convert.
 
 The plan stage always uses GPT-5.5 (the best reasoner) regardless of complexity, because a good plan is what enables cheap models to succeed.
 
@@ -439,7 +446,7 @@ Review output captured to `~/.logpose/logs/review-<id>-<slug>.log`.
 - **OpenCode plan agent writes to stdout, not files.** `lg task plan` captures stdout and saves it as the plan .md file. This is normal.
 - **OpenCode plan agent can time out even on small projects (5+ min).** Kill the process, retry once. If it fails again, write the plan .md manually using the plan template. Then `lg task status <id> planned`. Do NOT start implementing after writing the plan — it's for opencode build, not for you.
 - **OpenCode build can time out on larger tasks (10 min).** If `lg task build` hangs, kill it, then retry with `lg task build <id> --force`. If it fails repeatedly, report the failure to the user — do NOT implement the code yourself with direct tools. The answer to a failed build is to fix the task description or re-run, not to bypass opencode entirely.
-- **Build-log gate on `lg task status <id> done`** — new in v3.3.0. The binary itself refuses to mark a task done without a build log. Use `lg task build <id>` or `lg task status <id> done --force`. The `--force` flag is visible to the user — do not use it habitually.
+- **Build-log gate on `lg task status <id> done`** — new in v3.3.0. C1-C5 refuse to mark done without a build log. C0 is the only direct mechanical-change bypass. The `--force` flag is visible to the user — do not use it habitually.
 - **`lg task build` uses `--dangerously-skip-permissions`** to auto-approve file access in non-interactive subprocess contexts. This only affects the subprocess spawned by `lg task build` — interactive opencode TUI sessions still prompt normally. Builds work end-to-end from Hermes. If a build produces broken code, fix with direct tools or `delegate_task` subagents, then re-verify.
 - **`lg task build` may fail if the repo lacks a configured git author identity.** Pre-configure in the project repo: `git config user.name "Name" && git config user.email "email@example.com"`.
 - **Always clean up after `idea convert` when splitting.** The convert creates a combined task — delete it immediately.
@@ -447,7 +454,7 @@ Review output captured to `~/.logpose/logs/review-<id>-<slug>.log`.
 - **Register a project BEFORE adding ideas/tasks to it.**
 - **When a project doesn't exist yet, scan the filesystem first** with `find ~ -maxdepth 2 -type d -iname "*keyword*"`, then register it.
 - **Build logs are at `~/.logpose/logs/`,** not inside project directories.
-- **Complexity defaults to 3 (DeepSeek V4 Flash) when not set.** Set `-c` explicitly for simple (1-2) or complex (4-5) tasks.
+- **Complexity defaults to 3 (GLM-5.2) when not set.** Set `-c 0` only for mechanical changes, or `-c` explicitly for simple (1-2) or complex (4-5) tasks.
 - **If a build fails, the task is marked "blocked".** Fix the issue, then retry with `lg task build <id> --force`.
 - **"plan all" / "build all" — execute all in dependency order without asking.** Don't prompt between tasks. Run sequentially, report at the end.
 - **The plan model (GPT-5.5) is always used for planning, regardless of task complexity.** This is intentional — a good plan enables cheap build models to succeed. Don't override the plan model unless the user explicitly asks.
@@ -459,7 +466,7 @@ Review output captured to `~/.logpose/logs/review-<id>-<slug>.log`.
   # ... build completes ...
   lg config set 1 opencode-go/deepseek-v4-flash
   lg config set 2 opencode-go/deepseek-v4-flash
-  lg config set 3 opencode-go/deepseek-v4-flash
+  lg config set 3 openai/glm-5.2
   lg config set 4 openai/gpt-5.4
   lg config set 5 openai/gpt-5.5
   ```

@@ -342,7 +342,7 @@ def cmd_idea_add(args):
     if desc is None and not sys.stdin.isatty():
         desc = sys.stdin.read().strip()
     idea = idea_add(conn, proj["id"], args.title, description=desc, complexity=args.complexity)
-    complexity_str = f" (complexity: {args.complexity})" if args.complexity else ""
+    complexity_str = f" (complexity: {args.complexity})" if args.complexity is not None else ""
     print(f"Idea #{idea['id']} '{idea['title']}' added to project '{proj['name']}'{complexity_str}")
     conn.close()
 
@@ -361,7 +361,7 @@ def cmd_idea_list(args):
     if not ideas:
         print("(no ideas)")
     for i in ideas:
-        complexity_str = f" C:{i['complexity']}" if i["complexity"] else ""
+        complexity_str = f" C:{i['complexity']}" if i["complexity"] is not None else ""
         desc_preview = (i["description"] or "")[:80]
         print(f"  #{i['id']} [{i['status']}] {i['title']}  ({i['project_name']}){complexity_str}")
         if desc_preview:
@@ -408,7 +408,7 @@ def cmd_idea_refine_ai(args):
         sys.exit(1)
 
     proj = project_get(conn, idea["project_id"])
-    model = get_model_for_role("refine")
+    model = get_model_for_role("refine", override=args.model)
     print(f"[logpose] Model: {model} (role: refine)")
 
     from logpose.opencode import run_refine
@@ -444,7 +444,7 @@ def cmd_idea_convert(args):
     task = task_add(conn, idea["project_id"], idea["title"], description=desc, idea_id=idea["id"], complexity=complexity)
     idea_update(conn, args.id, status="converted")
     msg = f"Idea #{args.id} '{idea['title']}' → Task #{task['id']}"
-    if complexity:
+    if complexity is not None:
         msg += f" (complexity: {complexity})"
     print(msg)
     conn.close()
@@ -558,7 +558,7 @@ def cmd_task_add(args):
     if desc is None and not sys.stdin.isatty():
         desc = sys.stdin.read().strip()
     task = task_add(conn, proj["id"], args.title, description=desc, complexity=args.complexity)
-    complexity_str = f" (complexity: {args.complexity})" if args.complexity else ""
+    complexity_str = f" (complexity: {args.complexity})" if args.complexity is not None else ""
     print(f"Task #{task['id']} '{task['title']}' added to project '{proj['name']}'{complexity_str}")
     conn.close()
 
@@ -582,7 +582,7 @@ def cmd_task_list(args):
         if deps:
             dep_ids = [f"#{d['id']}" for d in deps]
             dep_str = f"  ← deps: {', '.join(dep_ids)}"
-        complexity_str = f" C:{t['complexity']}" if t["complexity"] else ""
+        complexity_str = f" C:{t['complexity']}" if t["complexity"] is not None else ""
         print(f"  #{t['id']} [{t['status']}] {t['title']}  ({t['project_name']}){complexity_str}{dep_str}")
     conn.close()
 
@@ -618,7 +618,7 @@ def cmd_task_plan(args):
         sys.exit(1)
 
     proj = project_get(conn, task["project_id"])
-    model = get_model_for_role("plan")
+    model = get_model_for_role("plan", override=args.model)
     print(f"[logpose] Model: {model} (role: plan)")
 
     from logpose.opencode import run_plan
@@ -645,6 +645,11 @@ def cmd_task_build(args):
     if not task:
         print(f"Task #{args.id} not found.")
         sys.exit(1)
+    if task["complexity"] == 0:
+        print(f"ERROR: Task #{args.id} is complexity 0.")
+        print("  C0 is only for trivial mechanical changes applied directly by Hermes, then verified.")
+        print("  Use `lg task status <id> done` after verification, or change complexity to 1-5 for build workflow.")
+        sys.exit(1)
 
     # Check dependencies
     deps = task_get_deps(conn, args.id)
@@ -659,15 +664,16 @@ def cmd_task_build(args):
     proj = project_get(conn, task["project_id"])
     config = load_config()
 
-    model = get_model_for_complexity(task["complexity"])
-    print(f"[logpose] Model: {model} (complexity: {task['complexity'] or 'default(3)'})")
+    model = get_model_for_complexity(task["complexity"], override=args.model)
+    complexity_label = task["complexity"] if task["complexity"] is not None else "default(3)"
+    print(f"[logpose] Model: {model} (complexity: {complexity_label})")
 
     pr_mode = _is_pr_mode(proj, config, task["complexity"])
     branch = _task_branch_name(task) if pr_mode else _current_branch(proj["path"])
     if pr_mode:
         reason = "project flag"
         if not proj["pr_workflow"]:
-            eff_c = task["complexity"] if task["complexity"] else 3
+            eff_c = task["complexity"] if task["complexity"] is not None else 3
             reason = f"complexity {eff_c} >= min_complexity {config.get('pr_workflow', {}).get('min_complexity')}"
         print(f"[logpose] PR mode: branch {branch}  (reason: {reason})")
         _git(proj["path"], "checkout", "-b", branch)
@@ -715,7 +721,7 @@ def cmd_task_review(args):
         sys.exit(1)
 
     proj = project_get(conn, task["project_id"])
-    model = get_model_for_role("review")
+    model = get_model_for_role("review", override=args.model)
     print(f"[logpose] Model: {model} (role: review)")
 
     from logpose.opencode import run_review
@@ -748,7 +754,7 @@ def cmd_task_status(args):
         sys.exit(1)
 
     # Build-log gate: refuse "done" without a build log unless --force
-    if args.status == "done" and not args.force:
+    if args.status == "done" and task["complexity"] != 0 and not args.force:
         log_path = task["log_path"]
         log_exists = log_path and os.path.isfile(log_path)
         if not log_exists:
@@ -761,6 +767,8 @@ def cmd_task_status(args):
             print(f"  Expected log: {expected}")
             print(f"  To bypass: `lg task status {args.id} done --force`")
             sys.exit(1)
+    if args.status == "done" and task["complexity"] == 0 and not task["log_path"]:
+        print("C0 mechanical-change bypass: no build log required; verification is still required.")
 
     task = task_update(conn, args.id, status=args.status)
     if task:
@@ -1035,6 +1043,7 @@ def cmd_config_show(args):
     print(f"  review:  {models.get('review', '(not set)')}")
     print()
     print("Complexity → Build model mapping:")
+    print("  0: Hermes direct mechanical patch only (no build model)")
     for level in range(1, 6):
         model = models.get(str(level), "(not set)")
         print(f"  {level}: {model}")
@@ -1297,6 +1306,24 @@ def _find_ui_dir():
     sys.exit(1)
 
 
+def _get_tailscale_ip():
+    """Get the Tailscale IP address if available."""
+    try:
+        result = subprocess.run(
+            ["tailscale", "ip", "-4"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0:
+            ip = result.stdout.strip()
+            if ip:
+                return ip
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    return None
+
+
 def _npm(ui_dir, *args, env=None):
     subprocess.check_call(["npm", *args], cwd=ui_dir, env=env)
 
@@ -1315,6 +1342,10 @@ def cmd_ui(args):
     ui_dir = _find_ui_dir()
     env = os.environ.copy()
     env["PORT"] = str(args.port)
+    env["HOST"] = "0.0.0.0"
+
+    tailscale_ip = _get_tailscale_ip()
+    tailscale_msg = f" (Tailscale: http://{tailscale_ip}:{args.port})" if tailscale_ip else ""
 
     if action == "build":
         _ensure_ui_ready(ui_dir, build=False)
@@ -1324,12 +1355,12 @@ def cmd_ui(args):
 
     if action == "dev":
         _ensure_ui_ready(ui_dir, build=False)
-        print(f"Dashboard dev server starting. API: http://0.0.0.0:{args.port}")
+        print(f"Dashboard dev server starting. API: http://0.0.0.0:{args.port}{tailscale_msg}")
         _npm(ui_dir, "run", "dev", env=env)
         return
 
     _ensure_ui_ready(ui_dir, build=True)
-    print(f"Dashboard available at http://0.0.0.0:{args.port}")
+    print(f"Dashboard available at http://0.0.0.0:{args.port}{tailscale_msg}")
     _npm(ui_dir, "start", env=env)
 
 
@@ -1404,7 +1435,7 @@ def _is_pr_mode(project, config, task_complexity=None):
         except ValueError:
             pass
     # Complexity-gated PR: tasks at or above the threshold get PRs.
-    # Tasks with no explicit complexity default to 3 (matching model selection).
+    # Tasks with no explicit complexity default to 3; explicit 0 stays 0.
     effective_complexity = task_complexity if task_complexity is not None else 3
     min_complexity = config.get("pr_workflow", {}).get("min_complexity")
     if min_complexity is not None:
@@ -1439,8 +1470,8 @@ def _load_env(env_dir=None):
 
 # ─── Main CLI ────────────────────────────────────────────────────────────────
 
-def main():
-    _load_env()
+def _build_parser():
+    """Build and return the argument parser. Extracted for testing."""
     parser = argparse.ArgumentParser(
         description="logpose — Track projects, ideas, and tasks. The log pose to your next island.",
     )
@@ -1484,7 +1515,7 @@ def main():
     ia.add_argument("project")
     ia.add_argument("title")
     ia.add_argument("-d", "--description", default=None)
-    ia.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Complexity score (1-5)")
+    ia.add_argument("-c", "--complexity", type=int, choices=[0, 1, 2, 3, 4, 5], default=None, help="Complexity score (0-5)")
     ia.set_defaults(func=cmd_idea_add)
     il = isub.add_parser("list", help="List ideas")
     il.add_argument("project", nargs="?", default=None)
@@ -1497,10 +1528,11 @@ def main():
     ir = isub.add_parser("refine", help="Mark idea as refined (manual)")
     ir.add_argument("id", type=int)
     ir.add_argument("-d", "--description", default=None, help="Refined description")
-    ir.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Complexity score (1-5)")
+    ir.add_argument("-c", "--complexity", type=int, choices=[0, 1, 2, 3, 4, 5], default=None, help="Complexity score (0-5)")
     ir.set_defaults(func=cmd_idea_refine)
     ira = isub.add_parser("refine-ai", help="Refine idea using opencode (AI)")
     ira.add_argument("id", type=int)
+    ira.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     ira.set_defaults(func=cmd_idea_refine_ai)
     ic = isub.add_parser("convert", help="Convert idea to task")
     ic.add_argument("id", type=int)
@@ -1541,7 +1573,7 @@ def main():
 
     bp = bsub.add_parser("promote", help="Convert bug to task")
     bp.add_argument("id", type=int)
-    bp.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None)
+    bp.add_argument("-c", "--complexity", type=int, choices=[0, 1, 2, 3, 4, 5], default=None)
     bp.set_defaults(func=cmd_bug_promote)
 
     brm = bsub.add_parser("rm", help="Remove a bug")
@@ -1555,7 +1587,7 @@ def main():
     ta.add_argument("project")
     ta.add_argument("title")
     ta.add_argument("-d", "--description", default=None)
-    ta.add_argument("-c", "--complexity", type=int, choices=[1, 2, 3, 4, 5], default=None, help="Complexity score (1-5)")
+    ta.add_argument("-c", "--complexity", type=int, choices=[0, 1, 2, 3, 4, 5], default=None, help="Complexity score (0-5)")
     ta.set_defaults(func=cmd_task_add)
     tl = tsub.add_parser("list", help="List tasks")
     tl.add_argument("project", nargs="?", default=None)
@@ -1567,13 +1599,16 @@ def main():
     ts.set_defaults(func=cmd_task_show)
     tp = tsub.add_parser("plan", help="Run opencode plan agent for this task")
     tp.add_argument("id", type=int)
+    tp.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     tp.set_defaults(func=cmd_task_plan)
     tb = tsub.add_parser("build", help="Run opencode build for this task")
     tb.add_argument("id", type=int)
     tb.add_argument("--force", action="store_true", help="Build even if deps aren't done")
+    tb.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     tb.set_defaults(func=cmd_task_build)
     trv = tsub.add_parser("review", help="Run opencode review agent for this task")
     trv.add_argument("id", type=int)
+    trv.add_argument("--model", default=None, help="Override the model for this run (e.g. openai/gpt-5.5)")
     trv.set_defaults(func=cmd_task_review)
     tst = tsub.add_parser("status", help="Update task status")
     tst.add_argument("id", type=int)
@@ -1682,6 +1717,12 @@ def main():
     brm.add_argument("id", type=int)
     brm.set_defaults(func=cmd_brain_rm)
 
+    return parser
+
+
+def main():
+    _load_env()
+    parser = _build_parser()
     args = parser.parse_args()
 
     if not hasattr(args, "func"):

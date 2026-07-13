@@ -8,6 +8,7 @@ import { mapBrain, mapBugs, mapIdeas, mapProjects, mapTasks, summarizeStatus } f
 
 const app = express();
 const port = Number(process.env.PORT ?? 3737);
+const host = process.env.HOST ?? "0.0.0.0";
 const dbPath = path.join(os.homedir(), ".logpose", "tix.db");
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -213,6 +214,6 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
 });
 
-app.listen(port, "127.0.0.1", () => {
-  console.log(`logpose-ui listening on http://127.0.0.1:${port}`);
+app.listen(port, host, () => {
+  console.log(`logpose-ui listening on http://${host}:${port}`);
 });

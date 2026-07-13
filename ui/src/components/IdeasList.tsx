@@ -6,8 +6,11 @@ const colors: Record<Idea["status"], string> = {
   converted: "text-slate-400"
 };
 
+const OPEN_IDEA_STATUSES: Set<Idea["status"]> = new Set(["new", "refined"]);
+
 export function IdeasList({ ideas }: { ideas: Idea[] }) {
-  const grouped = ideas.reduce<Record<string, Idea[]>>((groups, idea) => {
+  const open = ideas.filter((i) => OPEN_IDEA_STATUSES.has(i.status));
+  const grouped = open.reduce<Record<string, Idea[]>>((groups, idea) => {
     groups[idea.projectName] ??= [];
     groups[idea.projectName].push(idea);
     return groups;

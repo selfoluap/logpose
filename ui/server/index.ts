@@ -21,9 +21,16 @@ function parseTime(value: unknown) {
   return Number.isNaN(ms) ? null : ms / 1000;
 }
 
-function taskDuration(taskId: number) {
-  const file = path.join(logDir, `task-${taskId}-build.jsonl`);
-  if (!fs.existsSync(file)) return null;
+function logCandidates(taskId: number, logPath: unknown) {
+  return [
+    path.join(logDir, `task-${taskId}-build.jsonl`),
+    typeof logPath === "string" ? logPath : null
+  ].filter((file): file is string => typeof file === "string" && fs.existsSync(file));
+}
+
+function taskBuildStats(taskId: number, logPath: unknown) {
+  const file = logCandidates(taskId, logPath)[0];
+  if (!file) return null;
 
   let firstStart: number | null = null;
   let lastFinish: number | null = null;
@@ -33,17 +40,28 @@ function taskDuration(taskId: number) {
 
     try {
       const event = JSON.parse(line) as { type?: string; timestamp?: unknown; part?: { type?: string } };
+      const time = event as { time?: { start?: unknown; end?: unknown } };
+      const start = parseTime(time.time?.start ?? event.timestamp);
+      const finish = parseTime(time.time?.end ?? event.timestamp);
+
       if (event.type === "step_start" || event.part?.type === "step-start") {
-        firstStart ??= parseTime(event.timestamp);
+        firstStart ??= start;
       } else if (event.type === "step_finish" || event.part?.type === "step-finish") {
-        lastFinish = parseTime(event.timestamp) ?? lastFinish;
+        lastFinish = finish ?? lastFinish;
+      } else if (event.type === "tool_use") {
+        firstStart ??= start;
+        lastFinish = finish ?? lastFinish;
       }
     } catch {
       // Ignore partial log lines from interrupted builds.
     }
   }
 
-  return firstStart === null || lastFinish === null ? null : Math.max(0, Math.round(lastFinish - firstStart));
+  const statFinish = fs.statSync(file).mtimeMs / 1000;
+  return {
+    completedAt: lastFinish ?? statFinish,
+    durationSeconds: firstStart === null || lastFinish === null ? null : Math.max(0, Math.round(lastFinish - firstStart))
+  };
 }
 
 function openDb() {
@@ -154,6 +172,7 @@ app.get("/api/activity", (_req, res, next) => {
                 t.project_id as projectId,
                 p.name as projectName,
                 t.title,
+                t.log_path as logPath,
                 t.updated_at as updatedAt
               from tasks t
               join projects p on p.id = t.project_id
@@ -161,10 +180,11 @@ app.get("/api/activity", (_req, res, next) => {
               order by t.updated_at asc
             `
           )
-          .all() as Array<Record<string, unknown> & { id: unknown; projectId: unknown; projectName: string; title: string; updatedAt: unknown }>;
-        const durations = new Map(rows.map((row) => [Number(row.id), taskDuration(Number(row.id))]).filter((row): row is [number, number] => row[1] !== null));
+          .all() as Array<Record<string, unknown> & { id: unknown; projectId: unknown; projectName: string; title: string; logPath: unknown; updatedAt: unknown }>;
+        const stats = new Map(rows.map((row) => [Number(row.id), taskBuildStats(Number(row.id), row.logPath)]));
+        const durations = new Map([...stats].map(([id, stat]) => [id, stat?.durationSeconds ?? null]).filter((row): row is [number, number] => row[1] !== null));
 
-        return mapActivity(rows, durations);
+        return mapActivity(rows.map((row) => ({ ...row, activityAt: stats.get(Number(row.id))?.completedAt ?? row.updatedAt })), durations);
       })
     );
   } catch (error) {

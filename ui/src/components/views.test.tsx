@@ -57,19 +57,51 @@ describe("dashboard views", () => {
   });
 
   it("renders project drilldown", () => {
+    const doneAt = new Date().toISOString();
     const html = renderToStaticMarkup(
       <ProjectDetail
         project={{ id: 1, name: "alpha", path: "/tmp/a", agentsMdPath: "/tmp/a/AGENTS.md", createdAt: "", updatedAt: "", taskCount: 2, ideaCount: 1 }}
         tasks={[{ id: 1, projectId: 1, projectName: "alpha", ideaId: null, title: "Ship UI", description: null, status: "done", createdAt: "", updatedAt: "", complexity: 2, dependsOn: [] }]}
-        activity={[{ date: "2026-01-02", projectId: 1, projectName: "alpha", count: 1, tasks: [{ id: 1, title: "Ship UI", doneAt: "2026-01-02T00:00:00.000Z", durationSeconds: 60 }] }]}
+        activity={[{ date: doneAt.slice(0, 10), projectId: 1, projectName: "alpha", count: 1, tasks: [{ id: 1, title: "Ship UI", doneAt, durationSeconds: 60 }] }]}
         onBack={() => undefined}
       />
     );
 
     expect(html).toContain("Back to work history");
     expect(html).toContain("Project activity");
-    expect(html).toContain("<svg");
+    expect(html).toContain("<select");
+    expect(html).toContain("24 hours");
+    expect(html).toContain("completed task");
+    expect(html).toContain("bg-[var(--online)]/90");
     expect(html).toContain("Task overview");
+  });
+
+  it("switches project activity ranges", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <ProjectDetail
+          project={{ id: 1, name: "alpha", path: "/tmp/a", agentsMdPath: null, createdAt: "", updatedAt: "", taskCount: 1, ideaCount: 0 }}
+          tasks={[]}
+          activity={[{ date: new Date().toISOString().slice(0, 10), projectId: 1, projectName: "alpha", count: 1, tasks: [{ id: 1, title: "Done", doneAt: new Date().toISOString(), durationSeconds: null }] }]}
+          onBack={() => undefined}
+        />
+      );
+    });
+
+    const select = container.querySelector("select")!;
+    act(() => {
+      select.value = "1w";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("last 1 week");
+
+    act(() => { root.unmount(); });
+    container.remove();
   });
 
   it("renders kanban columns and task details", () => {

@@ -1,6 +1,17 @@
+import { useState } from "react";
 import type { ActivityBucket, Project, Task, TaskStatus } from "../types";
 
 const statuses: TaskStatus[] = ["pending", "planned", "in_progress", "blocked", "done"];
+const activityRanges = [
+  { label: "1 minute", value: "1m", ms: 60 * 1000, bins: 12 },
+  { label: "1 hour", value: "1h", ms: 60 * 60 * 1000, bins: 24 },
+  { label: "12 hours", value: "12h", ms: 12 * 60 * 60 * 1000, bins: 24 },
+  { label: "24 hours", value: "24h", ms: 24 * 60 * 60 * 1000, bins: 24 },
+  { label: "1 week", value: "1w", ms: 7 * 24 * 60 * 60 * 1000, bins: 28 },
+  { label: "30 days", value: "30d", ms: 30 * 24 * 60 * 60 * 1000, bins: 30 },
+] as const;
+
+type ActivityRangeValue = (typeof activityRanges)[number]["value"];
 
 type Props = {
   project: Project;
@@ -10,6 +21,7 @@ type Props = {
 };
 
 export function ProjectDetail({ project, tasks, activity, onBack }: Props) {
+  const [activityRange, setActivityRange] = useState<ActivityRangeValue>("24h");
   const doneCount = tasks.filter((task) => task.status === "done").length;
 
   return (
@@ -35,7 +47,7 @@ export function ProjectDetail({ project, tasks, activity, onBack }: Props) {
         <Stat label="Activity Days" value={activity.length} />
       </div>
 
-      <ProjectActivityChart activity={activity} />
+      <ProjectActivityChart activity={activity} range={activityRange} onRangeChange={setActivityRange} />
 
       <div className="panel p-4">
         <h3 className="mb-3 text-sm font-medium">Task overview</h3>
@@ -61,31 +73,81 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ProjectActivityChart({ activity }: { activity: ActivityBucket[] }) {
-  const max = Math.max(...activity.map((bucket) => bucket.count), 1);
-  const points = activity.map((bucket, index) => {
-    const x = activity.length === 1 ? 50 : (index / (activity.length - 1)) * 100;
-    const y = 90 - (bucket.count / max) * 70;
-    return `${x},${y}`;
-  });
+function ProjectActivityChart({
+  activity,
+  range,
+  onRangeChange,
+}: {
+  activity: ActivityBucket[];
+  range: ActivityRangeValue;
+  onRangeChange: (range: ActivityRangeValue) => void;
+}) {
+  const selectedRange = activityRanges.find((item) => item.value === range) ?? activityRanges[3];
+  const now = Date.now();
+  const start = now - selectedRange.ms;
+  const binMs = selectedRange.ms / selectedRange.bins;
+  const bins = Array.from({ length: selectedRange.bins }, (_, index) => ({
+    start: start + index * binMs,
+    end: start + (index + 1) * binMs,
+    count: 0,
+  }));
+
+  for (const bucket of activity) {
+    for (const task of bucket.tasks) {
+      const doneAt = Date.parse(task.doneAt);
+      if (Number.isNaN(doneAt) || doneAt < start || doneAt > now) continue;
+
+      bins[Math.min(Math.floor((doneAt - start) / binMs), bins.length - 1)].count += 1;
+    }
+  }
+
+  const total = bins.reduce((sum, bin) => sum + bin.count, 0);
+  const max = Math.max(...bins.map((bin) => bin.count), 1);
 
   return (
     <div className="panel p-4">
-      <div className="mb-4">
-        <h3 className="text-sm font-medium">Project activity</h3>
-        <p className="text-xs text-[var(--muted)]">Completed tasks over time</p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Project activity</h3>
+          <p className="text-xs text-[var(--muted)]">
+            {total} completed task{total === 1 ? "" : "s"} in the last {selectedRange.label}
+          </p>
+        </div>
+        <select className="range-select" value={range} onChange={(event) => onRangeChange(event.target.value as ActivityRangeValue)}>
+          {activityRanges.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
+        </select>
       </div>
-      {activity.length === 0 ? (
-        <div className="text-sm text-[var(--muted)]">No completed work yet.</div>
+      {total === 0 ? (
+        <div className="text-sm text-[var(--muted)]">No completed work in this range.</div>
       ) : (
-        <svg viewBox="0 0 100 100" className="h-56 w-full overflow-visible">
-          <polyline fill="none" stroke="var(--online)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={points.join(" ")} />
-          {activity.map((bucket, index) => {
-            const [x, y] = points[index].split(",");
-            return <circle key={bucket.date} cx={x} cy={y} r="2.4" fill="var(--online)" />;
-          })}
-        </svg>
+        <div className="space-y-2">
+          <div className="flex h-48 items-end gap-1 rounded-[var(--radius)] border border-[var(--line)] bg-black/10 p-3">
+            {bins.map((bin) => (
+              <div
+                key={bin.start}
+                className="min-w-0 flex-1 rounded-t bg-[var(--online)]/90"
+                style={{ height: bin.count ? `${Math.max((bin.count / max) * 100, 8)}%` : 2 }}
+                title={`${bin.count} task${bin.count === 1 ? "" : "s"} from ${formatRangeTime(bin.start)} to ${formatRangeTime(bin.end)}`}
+              />
+            ))}
+          </div>
+          <div className="flex justify-between text-[0.65rem] text-[var(--muted)]">
+            <span>{formatRangeTime(start)}</span>
+            <span>{formatRangeTime(now)}</span>
+          </div>
+        </div>
       )}
     </div>
   );
+}
+
+function formatRangeTime(ms: number) {
+  return new Date(ms).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

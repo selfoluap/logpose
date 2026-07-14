@@ -61,13 +61,13 @@ describe("server data shaping", () => {
     ).toBe(iso);
   });
 
-  it("groups completed task activity by done day and project", () => {
+  it("groups completed task activity by historical activity day and project", () => {
     expect(
       mapActivity(
         [
-          { id: 1, projectId: 10, projectName: "alpha", title: "Ship graph", updatedAt: 86400 },
-          { id: 2, projectId: 10, projectName: "alpha", title: "Add drilldown", updatedAt: 86460 },
-          { id: 3, projectId: 20, projectName: "beta", title: "Fix bug", updatedAt: 172800 }
+          { id: 1, projectId: 10, projectName: "alpha", title: "Ship graph", activityAt: 86400, updatedAt: 999999 },
+          { id: 2, projectId: 10, projectName: "alpha", title: "Add drilldown", activityAt: 86460, updatedAt: 999999 },
+          { id: 3, projectId: 20, projectName: "beta", title: "Fix bug", activityAt: null, updatedAt: 172800 }
         ],
         new Map([[1, 90]])
       )

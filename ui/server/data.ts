@@ -69,6 +69,7 @@ type ActivityRow = Row & {
   projectId: unknown;
   projectName: string;
   title: string;
+  activityAt?: unknown;
   updatedAt: unknown;
 };
 
@@ -84,7 +85,7 @@ export function mapActivity(rows: ActivityRow[], durations: Map<number, number>)
   for (const row of rows) {
     const id = Number(row.id);
     const projectId = Number(row.projectId);
-    const doneAt = toIso(row.updatedAt);
+    const doneAt = toIso(row.activityAt ?? row.updatedAt);
     const date = doneAt.slice(0, 10);
     const key = `${date}:${projectId}`;
     const bucket = buckets.get(key) ?? { date, projectId, projectName: row.projectName, count: 0, tasks: [] };

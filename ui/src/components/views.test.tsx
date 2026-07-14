@@ -1,7 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
+import App from "../App";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { BrainList } from "./BrainList";
 import { Dashboard } from "./Dashboard";
@@ -164,6 +165,58 @@ describe("dashboard views", () => {
     // Keyboard Space on first row
     act(() => { rows[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })); });
     expect(onSelect).toHaveBeenCalledWith(1);
+
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders app dashboard and drills down to project detail from work-history table via click and keyboard", async () => {
+    const projects = [
+      { id: 1, name: "alpha", path: "/tmp/a", agentsMdPath: null, createdAt: "2026-01-01", updatedAt: "2026-01-02", taskCount: 2, ideaCount: 1 },
+      { id: 2, name: "beta", path: "/tmp/b", agentsMdPath: "/tmp/b/AGENTS.md", createdAt: "2026-01-01", updatedAt: "2026-01-03", taskCount: 3, ideaCount: 0 },
+    ];
+
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      const data: Record<string, unknown> = {
+        "/api/status": { projects: 2, tasks: { pending: 0, done: 5 }, ideas: { new: 1 }, brain: { exploring: 0 }, bugs: { error: 0 } },
+        "/api/projects": projects,
+        "/api/activity": [],
+        "/api/tasks": [],
+        "/api/ideas": [],
+        "/api/brain": [],
+      };
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(data[url] ?? []) });
+    });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => { root.render(<App />); });
+    await act(async () => {});
+
+    expect(container.textContent).toContain("Work history");
+    const rows = container.querySelectorAll<HTMLTableRowElement>("tbody tr");
+    expect(rows.length).toBe(2);
+
+    act(() => { rows[0]!.click(); });
+    expect(container.textContent).toContain("Back to work history");
+    expect(container.textContent).toContain("Project activity");
+    expect(container.textContent).toContain("alpha");
+    expect(container.textContent).toContain("Task overview");
+
+    const backButton = [...container.querySelectorAll("button")].find((b) => b.textContent === "Back to work history")!;
+    act(() => { backButton.click(); });
+    expect(container.textContent).toContain("Work history");
+
+    const rows2 = container.querySelectorAll<HTMLTableRowElement>("tbody tr");
+    act(() => { rows2[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    expect(container.textContent).toContain("Back to work history");
+    expect(container.textContent).toContain("beta");
 
     act(() => { root.unmount(); });
     container.remove();

@@ -5,6 +5,7 @@ import { BrainList } from "./BrainList";
 import { Dashboard } from "./Dashboard";
 import { IdeasList } from "./IdeasList";
 import { KanbanBoard } from "./KanbanBoard";
+import { ProjectDetail } from "./ProjectDetail";
 
 describe("dashboard views", () => {
   it("styles completed activity graph and table", () => {
@@ -22,7 +23,7 @@ describe("dashboard views", () => {
     expect(html).toContain("width:100%");
   });
 
-  it("renders dashboard totals", () => {
+  it("renders dashboard totals and work history", () => {
     const html = renderToStaticMarkup(
       <Dashboard
         status={{ projects: 2, tasks: { pending: 1, done: 2 }, ideas: { new: 3 }, brain: { exploring: 4 }, bugs: { error: 1 } }}
@@ -31,22 +32,35 @@ describe("dashboard views", () => {
           { date: "2026-01-02", projectId: 1, projectName: "alpha", count: 1, tasks: [{ id: 7, title: "Done task", doneAt: "2026-01-02T00:00:00.000Z", durationSeconds: 120 }] },
           { date: "2026-01-02", projectId: 2, projectName: "beta", count: 1, tasks: [{ id: 8, title: "Other task", doneAt: "2026-01-02T01:00:00.000Z", durationSeconds: null }] }
         ]}
+        onProjectSelect={() => undefined}
       />
     );
 
     expect(html).toContain("Projects");
     expect(html).toContain("Brain Ideas");
-    expect(html).toContain("Completed task activity");
-    expect(html).toContain("Activity graph");
-    expect(html).toContain("aria-label=\"alpha completed 1 task on 2026-01-02\"");
+    expect(html).toContain("Work history");
+    expect(html).toContain("Completed work by project");
+    expect(html).toContain("cursor-pointer");
+    expect(html).toContain("bg-[var(--online)]");
     expect(html).toContain("<table");
     expect(html).toContain("2026-01-02");
-    expect(html).toContain("#7 Done task");
-    expect(html).toContain("#8 Other task");
-    expect(html).toContain("2m");
-    expect(html).toContain("duration unknown");
     expect(html).toContain("alpha");
-    expect(html).toContain("beta");
+  });
+
+  it("renders project drilldown", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDetail
+        project={{ id: 1, name: "alpha", path: "/tmp/a", agentsMdPath: "/tmp/a/AGENTS.md", createdAt: "", updatedAt: "", taskCount: 2, ideaCount: 1 }}
+        tasks={[{ id: 1, projectId: 1, projectName: "alpha", ideaId: null, title: "Ship UI", description: null, status: "done", createdAt: "", updatedAt: "", complexity: 2, dependsOn: [] }]}
+        activity={[{ date: "2026-01-02", projectId: 1, projectName: "alpha", count: 1, tasks: [{ id: 1, title: "Ship UI", doneAt: "2026-01-02T00:00:00.000Z", durationSeconds: 60 }] }]}
+        onBack={() => undefined}
+      />
+    );
+
+    expect(html).toContain("Back to work history");
+    expect(html).toContain("Project activity");
+    expect(html).toContain("<svg");
+    expect(html).toContain("Task overview");
   });
 
   it("renders kanban columns and task details", () => {

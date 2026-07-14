@@ -5,6 +5,7 @@ import { BrainList } from "./components/BrainList";
 import { Dashboard } from "./components/Dashboard";
 import { IdeasList } from "./components/IdeasList";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { ProjectDetail } from "./components/ProjectDetail";
 import { Sidebar } from "./components/Sidebar";
 import type { ActivityBucket, BrainIdea, Idea, Project, StatusSummary, Task } from "./types";
 
@@ -26,6 +27,8 @@ export default function App() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [brain, setBrain] = useState<BrainIdea[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
 
   useEffect(() => {
     Promise.all([api.status(), api.projects(), api.activity(), api.tasks(), api.ideas(), api.brain()])
@@ -44,7 +47,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[14rem_1fr]">
-      <Sidebar views={views} active={view} onChange={setView} />
+      <Sidebar
+        views={views}
+        active={view}
+        onChange={(nextView) => {
+          setView(nextView);
+          setSelectedProjectId(null);
+        }}
+      />
       <main className="p-4 md:p-6">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
@@ -53,7 +63,15 @@ export default function App() {
           </div>
         </div>
         {error ? <div className="panel p-4 text-sm text-red-300">{error}</div> : null}
-        {!error && view === "dashboard" ? <Dashboard status={status} projects={projects} activity={activity} /> : null}
+        {!error && view === "dashboard" && selectedProject ? (
+          <ProjectDetail
+            project={selectedProject}
+            tasks={tasks.filter((task) => task.projectId === selectedProject.id)}
+            activity={activity.filter((bucket) => bucket.projectId === selectedProject.id)}
+            onBack={() => setSelectedProjectId(null)}
+          />
+        ) : null}
+        {!error && view === "dashboard" && !selectedProject ? <Dashboard status={status} projects={projects} activity={activity} onProjectSelect={setSelectedProjectId} /> : null}
         {!error && view === "tasks" ? <KanbanBoard tasks={tasks} projects={projects} /> : null}
         {!error && view === "ideas" ? <IdeasList ideas={ideas} /> : null}
         {!error && view === "brain" ? <BrainList brain={brain} /> : null}

@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0d0f15;
-  --panel: rgba(24, 27, 38, 0.82);
-  --panel-strong: rgba(30, 34, 46, 0.92);
-  --line: rgba(255, 255, 255, 0.08);
+  --bg: #0b0f14;
+  --panel: rgba(17, 24, 34, 0.86);
+  --panel-strong: rgba(22, 31, 43, 0.96);
+  --line: rgba(148, 163, 184, 0.14);
   --text: #f1f5f9;
   --muted: #94a3b8;
-  --accent: #3b82f6;
+  --accent: #2563eb;
   --online: #22c55e;
   --offline: #ef4444;
   --unknown: #f59e0b;
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -44,6 +44,7 @@ select {
   border-radius: var(--radius);
   background: var(--panel);
   backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .badge {

@@ -21,6 +21,8 @@ describe("dashboard views", () => {
     expect(html).toContain("Projects");
     expect(html).toContain("Brain Ideas");
     expect(html).toContain("Completed task activity");
+    expect(html).toContain("Activity graph");
+    expect(html).toContain("aria-label=\"alpha completed 1 task on 2026-01-02\"");
     expect(html).toContain("<table");
     expect(html).toContain("2026-01-02");
     expect(html).toContain("#7 Done task");

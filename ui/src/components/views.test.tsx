@@ -1,11 +1,17 @@
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "react";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { BrainList } from "./BrainList";
 import { Dashboard } from "./Dashboard";
 import { IdeasList } from "./IdeasList";
 import { KanbanBoard } from "./KanbanBoard";
 import { ProjectDetail } from "./ProjectDetail";
+
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+});
 
 describe("dashboard views", () => {
   it("styles completed activity graph and table", () => {
@@ -41,6 +47,8 @@ describe("dashboard views", () => {
     expect(html).toContain("Work history");
     expect(html).toContain("Completed work by project");
     expect(html).toContain("cursor-pointer");
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('role="button"');
     expect(html).toContain("bg-[var(--online)]");
     expect(html).toContain("<table");
     expect(html).toContain("2026-01-02");
@@ -113,5 +121,51 @@ describe("dashboard views", () => {
 
     expect(html).not.toContain("Done");
     expect(html).not.toContain("alpha");
+  });
+
+  it("activates project drilldown from work-history table via click and keyboard", () => {
+    const onSelect = vi.fn();
+    const projects = [
+      { id: 1, name: "alpha", path: "/tmp/a", agentsMdPath: null, createdAt: "", updatedAt: "", taskCount: 2, ideaCount: 1 },
+      { id: 2, name: "beta", path: "/tmp/b", agentsMdPath: null, createdAt: "", updatedAt: "", taskCount: 3, ideaCount: 0 },
+    ];
+    const activity = [
+      { date: "2026-01-02", projectId: 1, projectName: "alpha", count: 1, tasks: [] },
+      { date: "2026-01-03", projectId: 2, projectName: "beta", count: 2, tasks: [] },
+    ];
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <Dashboard
+          status={{ projects: 2, tasks: { done: 5 }, ideas: { new: 1 }, brain: { exploring: 0 }, bugs: { error: 0 } }}
+          projects={projects}
+          activity={activity}
+          onProjectSelect={onSelect}
+        />
+      );
+    });
+
+    const rows = container.querySelectorAll<HTMLTableRowElement>("tbody tr");
+    expect(rows.length).toBe(2);
+
+    // Click on first row
+    act(() => { rows[0]!.click(); });
+    expect(onSelect).toHaveBeenCalledWith(1);
+    onSelect.mockClear();
+
+    // Keyboard Enter on second row
+    act(() => { rows[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    expect(onSelect).toHaveBeenCalledWith(2);
+    onSelect.mockClear();
+
+    // Keyboard Space on first row
+    act(() => { rows[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })); });
+    expect(onSelect).toHaveBeenCalledWith(1);
+
+    act(() => { root.unmount(); });
+    container.remove();
   });
 });

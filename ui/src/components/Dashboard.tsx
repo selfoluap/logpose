@@ -46,7 +46,7 @@ export function Dashboard({ status, projects, activity, onProjectSelect }: Props
                 const width = stats.count ? `${Math.max((stats.count / activityMax) * 100, 8)}%` : 0;
 
                 return (
-                  <tr key={project.id} onClick={() => onProjectSelect(project.id)} className="cursor-pointer border-t border-[var(--line)] transition-colors hover:bg-white/[0.04]">
+                  <tr key={project.id} tabIndex={0} role="button" onClick={() => onProjectSelect(project.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onProjectSelect(project.id); } }} className="cursor-pointer border-t border-[var(--line)] transition-colors hover:bg-white/[0.04]">
                     <td className="px-4 py-3 font-medium">{project.name}</td>
                     <td className="px-4 py-3 text-[var(--muted)]">{project.taskCount}</td>
                     <td className="px-4 py-3 text-[var(--muted)]">{project.ideaCount}</td>

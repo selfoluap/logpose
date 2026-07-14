@@ -1,11 +1,27 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { ActivityTimeline } from "./ActivityTimeline";
 import { BrainList } from "./BrainList";
 import { Dashboard } from "./Dashboard";
 import { IdeasList } from "./IdeasList";
 import { KanbanBoard } from "./KanbanBoard";
 
 describe("dashboard views", () => {
+  it("styles completed activity graph and table", () => {
+    const html = renderToStaticMarkup(
+      <ActivityTimeline
+        buckets={[{ date: "2026-01-02", projectId: 1, projectName: "alpha", count: 3, tasks: [{ id: 7, title: "Done task", doneAt: "2026-01-02T00:00:00.000Z", durationSeconds: 120 }] }]}
+      />
+    );
+
+    expect(html).toContain('class="mx-auto w-full overflow-x-auto"');
+    expect(html).toContain('class="w-full min-w-full text-left text-sm"');
+    expect(html).toContain('class="border-b border-[var(--line)] px-3 py-3 text-center text-xl font-bold normal-case tracking-normal text-[var(--text)]"');
+    expect(html).toContain('class="w-10 text-right text-sm font-bold text-[var(--text)]"');
+    expect(html).toContain('class="h-4 rounded bg-[var(--online)]"');
+    expect(html).toContain("width:100%");
+  });
+
   it("renders dashboard totals", () => {
     const html = renderToStaticMarkup(
       <Dashboard

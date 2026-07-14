@@ -40,38 +40,38 @@ export function ActivityTimeline({ buckets }: Props) {
             <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Activity graph</h3>
             <div className="min-w-max space-y-3">
               {projects.map((project) => (
-                <div key={project} className="grid grid-cols-[7rem_repeat(var(--day-count),2.75rem)] items-end gap-2" style={graphStyle}>
-                  <div className="truncate pb-6 text-xs text-[var(--muted)]">{project}</div>
+                <div key={project} className="grid grid-cols-[7rem_repeat(var(--day-count),8rem)] items-center gap-2" style={graphStyle}>
+                  <div className="truncate text-xs text-[var(--muted)]">{project}</div>
                   {dates.map((date) => {
                     const count = bucketFor(date, project)?.count ?? 0;
                     const label = `${project} completed ${taskLabel(count)} on ${date}`;
 
                     return (
-                      <div key={date} className="flex flex-col items-center gap-1">
-                        <div className="flex h-20 w-8 items-end rounded border border-[var(--line)] bg-black/10 p-1" aria-label={label} title={label}>
-                          <div className="w-full rounded-sm bg-[var(--accent)]" style={{ height: count ? `${Math.max((count / maxCount) * 100, 12)}%` : 0 }} />
+                      <div key={date} className="flex items-center gap-2" aria-label={label} title={label}>
+                        <span className="w-10 text-right text-sm font-bold text-[var(--text)]">{count}</span>
+                        <div className="h-4 w-20 rounded bg-black/10">
+                          <div className="h-4 rounded bg-[var(--online)]" style={{ width: count ? `${Math.max((count / maxCount) * 100, 12)}%` : 0 }} />
                         </div>
-                        <span className="text-[0.65rem] text-[var(--muted)]">{count}</span>
                       </div>
                     );
                   })}
                 </div>
               ))}
-              <div className="grid grid-cols-[7rem_repeat(var(--day-count),2.75rem)] gap-2" style={graphStyle}>
+              <div className="grid grid-cols-[7rem_repeat(var(--day-count),8rem)] gap-2" style={graphStyle}>
                 <div />
                 {dates.map((date) => (
-                  <div key={date} className="-rotate-45 whitespace-nowrap text-[0.65rem] text-[var(--muted)]">{date.slice(5)}</div>
+                  <div key={date} className="text-center text-[0.65rem] text-[var(--muted)]">{date.slice(5)}</div>
                 ))}
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+          <div className="mx-auto w-full overflow-x-auto">
+            <table className="w-full min-w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-[var(--muted)]">
                 <tr>
                   <th className="border-b border-[var(--line)] py-2 pr-4 font-medium">Date</th>
                   {projects.map((project) => (
-                    <th key={project} className="border-b border-[var(--line)] px-3 py-2 font-medium">{project}</th>
+                    <th key={project} className="border-b border-[var(--line)] px-3 py-3 text-center text-xl font-bold normal-case tracking-normal text-[var(--text)]">{project}</th>
                   ))}
                 </tr>
               </thead>

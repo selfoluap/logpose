@@ -180,7 +180,7 @@ describe("dashboard views", () => {
       { id: 2, name: "beta", path: "/tmp/b", agentsMdPath: "/tmp/b/AGENTS.md", createdAt: "2026-01-01", updatedAt: "2026-01-03", taskCount: 3, ideaCount: 0 },
     ];
 
-    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url: string) => {
       const data: Record<string, unknown> = {
         "/api/status": { projects: 2, tasks: { pending: 0, done: 5 }, ideas: { new: 1 }, brain: { exploring: 0 }, bugs: { error: 0 } },
         "/api/projects": projects,
@@ -220,5 +220,27 @@ describe("dashboard views", () => {
 
     act(() => { root.unmount(); });
     container.remove();
+  });
+
+  it("does not leak mocked fetch into later tests", () => {
+    // The previous test (app drilldown) replaces globalThis.fetch with a mock
+    // and afterEach calls vi.restoreAllMocks(). If fetch is properly restored,
+    // calling fetch without a server should reject (not resolve with {}).
+    // We check that fetch is the global fetch (not a vi.fn() still returning undefined).
+    const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, "fetch");
+    expect(fetchDescriptor?.get).toBeUndefined();
+    // If fetch was a vi.fn() property, its set would still point to the spy setter
+    // which replaces globalThis.fetch. Instead, fetch should just be the native function.
+    // A quick smoke test: calling fetch without a server should reject.
+    if (typeof fetch !== "function") {
+      throw new Error("fetch is not a function");
+    }
+    // If fetch is still the vi.fn() mock (after vi.restoreAllMocks cleared its impl),
+    // it returns undefined, not a promise — so calling .catch would throw.
+    // Real fetch returns a promise that rejects with a TypeError.
+    const result = fetch("http://127.0.0.1:1/");
+    expect(result).toBeInstanceOf(Promise);
+    // If it's the leaked mock, .catch() throws because undefined is not thenable
+    expect(() => result.then(() => {}, () => {})).not.toThrow();
   });
 });

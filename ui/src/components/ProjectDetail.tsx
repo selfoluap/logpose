@@ -113,7 +113,7 @@ function ProjectActivityChart({
             {total} completed task{total === 1 ? "" : "s"} in the last {selectedRange.label}
           </p>
         </div>
-        <select className="range-select" value={range} onChange={(event) => onRangeChange(event.target.value as ActivityRangeValue)}>
+        <select aria-label="Project activity range" className="range-select" value={range} onChange={(event) => onRangeChange(event.target.value as ActivityRangeValue)}>
           {activityRanges.map((item) => (
             <option key={item.value} value={item.value}>{item.label}</option>
           ))}

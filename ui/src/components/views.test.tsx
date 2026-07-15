@@ -2,8 +2,17 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { LayoutDashboard } from "lucide-react";
 import App from "../App";
 import { ActivityTimeline } from "./ActivityTimeline";
+import { Sidebar } from "./Sidebar";
+
+const appCss = readFileSync(
+    resolve(process.cwd(), "src/styles/app.css"),
+    "utf8",
+);
 import { BrainList } from "./BrainList";
 import { Dashboard } from "./Dashboard";
 import { IdeasList } from "./IdeasList";
@@ -14,6 +23,70 @@ beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
+describe("design tokens", () => {
+  it("uses a hallmark dark oklch palette with a mono role and no decorative clutter", () => {
+    expect(appCss).toMatch(/Hallmark ·/);
+    expect(appCss).toMatch(/oklch\(/);
+    expect(appCss).toMatch(/--font-mono/);
+    expect(appCss).toMatch(/--color-paper/);
+    expect(appCss).not.toMatch(/radial-gradient/);
+  });
+
+  it("introduces accent-strong and section-space tokens for polish depth", () => {
+    expect(appCss).toMatch(/--color-accent-strong/);
+    expect(appCss).toMatch(/--space-section/);
+    expect(appCss).toMatch(/--color-paper-4/);
+  });
+});
+
+describe("redesigned chrome", () => {
+  it("renders an app header banner with the active view label", () => {
+    const html = renderToStaticMarkup(<App />);
+
+    expect(html).toContain('role="banner"');
+    expect(html).toContain("Dashboard");
+  });
+
+  it("renders a sidebar brand marker and a local status indicator", () => {
+    const html = renderToStaticMarkup(
+      <Sidebar
+        views={[{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }]}
+        active="dashboard"
+        onChange={() => undefined}
+      />
+    );
+
+    expect(html).toContain("brand-dot");
+    expect(html).toContain("local");
+  });
+
+  it("emphasizes the primary dashboard metric", () => {
+    const html = renderToStaticMarkup(
+      <Dashboard
+        status={{ projects: 1, tasks: { pending: 1 }, ideas: { new: 0 }, brain: {}, bugs: {} }}
+        projects={[]}
+        activity={[]}
+        onProjectSelect={() => undefined}
+      />
+    );
+
+    expect(html).toContain("stat-emphasis");
+  });
+
+  it("renders project detail eyebrow section labels", () => {
+    const html = renderToStaticMarkup(
+      <ProjectDetail
+        project={{ id: 1, name: "alpha", path: "/tmp/a", agentsMdPath: null, createdAt: "", updatedAt: "", taskCount: 0, ideaCount: 0 }}
+        tasks={[]}
+        activity={[]}
+        onBack={() => undefined}
+      />
+    );
+
+    expect(html).toContain("eyebrow");
+  });
+});
+
 describe("dashboard views", () => {
   it("styles completed activity graph and table", () => {
     const html = renderToStaticMarkup(
@@ -22,11 +95,11 @@ describe("dashboard views", () => {
       />
     );
 
-    expect(html).toContain('class="mx-auto w-full overflow-x-auto"');
-    expect(html).toContain('class="w-full min-w-full text-left text-sm"');
-    expect(html).toContain('class="border-b border-[var(--line)] px-3 py-3 text-center text-xl font-bold normal-case tracking-normal text-[var(--text)]"');
-    expect(html).toContain('class="w-10 text-right text-sm font-bold text-[var(--text)]"');
-    expect(html).toContain('class="h-4 rounded bg-[var(--online)]"');
+    expect(html).toContain("Activity graph");
+    expect(html).toContain("<table");
+    expect(html).toContain("2026-01-02");
+    expect(html).toContain("alpha");
+    expect(html).toContain("bg-[var(--online)]");
     expect(html).toContain("width:100%");
   });
 

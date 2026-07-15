@@ -45,8 +45,10 @@ export default function App() {
       });
   }, []);
 
+  const activeViewLabel = views.find((item) => item.id === view)?.label ?? "";
+
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[14rem_1fr]">
+    <div className="min-h-screen md:grid md:grid-cols-[12rem_1fr]">
       <Sidebar
         views={views}
         active={view}
@@ -55,14 +57,26 @@ export default function App() {
           setSelectedProjectId(null);
         }}
       />
-      <main className="p-4 md:p-6">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Logpose</h1>
-            <p className="text-sm text-[var(--muted)]">Local ticket dashboard</p>
+      <main className="px-5 py-5 md:px-8 md:py-7">
+        <header
+          role="banner"
+          className="mb-6 flex items-end justify-between gap-4 border-b border-[var(--line)] pb-4"
+        >
+          <div className="min-w-0">
+            <div
+              className="eyebrow truncate"
+              aria-label="breadcrumb"
+            >
+              logpose / {activeViewLabel.toLowerCase()}
+            </div>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight">{activeViewLabel}</h1>
           </div>
-        </div>
-        {error ? <div className="panel p-4 text-sm text-red-300">{error}</div> : null}
+          <div className="hidden items-center gap-2 text-[0.6875rem] uppercase tracking-[0.14em] text-[var(--muted)] md:flex">
+            <span className="brand-dot" aria-hidden="true" style={{ background: "var(--color-online)" }} />
+            <span style={{ fontFamily: "var(--font-mono)" }}>local</span>
+          </div>
+        </header>
+        {error ? <div className="panel p-4 text-sm" style={{ color: "var(--color-error)" }}>{error}</div> : null}
         {!error && view === "dashboard" && selectedProject ? (
           <ProjectDetail
             project={selectedProject}

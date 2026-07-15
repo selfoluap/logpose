@@ -26,21 +26,22 @@ export function ProjectDetail({ project, tasks, activity, onBack }: Props) {
 
   return (
     <section className="space-y-4">
-      <button type="button" onClick={onBack} className="text-sm text-[var(--muted)] hover:text-white">
+      <button type="button" onClick={onBack} className="text-sm text-[var(--muted)] transition-colors hover:text-[var(--text)]">
         Back to work history
       </button>
 
       <div className="panel p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold">{project.name}</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">{project.path}</p>
+            <div className="eyebrow">Project</div>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight">{project.name}</h2>
+            <p className="mt-1 font-mono text-xs text-[var(--muted)]" style={{ fontFamily: "var(--font-mono)" }}>{project.path}</p>
           </div>
           <span className="badge">{project.agentsMdPath ? "AGENTS.md" : "No AGENTS.md"}</span>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
         <Stat label="Tasks" value={tasks.length} />
         <Stat label="Done" value={doneCount} />
         <Stat label="Ideas" value={project.ideaCount} />
@@ -53,9 +54,9 @@ export function ProjectDetail({ project, tasks, activity, onBack }: Props) {
         <h3 className="mb-3 text-sm font-medium">Task overview</h3>
         <div className="grid gap-2 md:grid-cols-5">
           {statuses.map((status) => (
-            <div key={status} className="rounded-[var(--radius)] border border-[var(--line)] bg-black/10 p-3">
+            <div key={status} className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-white/[0.02] p-3">
               <div className="text-xs capitalize text-[var(--muted)]">{status.replaceAll("_", " ")}</div>
-              <div className="mt-1 text-2xl font-semibold">{tasks.filter((task) => task.status === status).length}</div>
+              <div className="mt-1 text-2xl font-semibold num">{tasks.filter((task) => task.status === status).length}</div>
             </div>
           ))}
         </div>
@@ -67,8 +68,8 @@ export function ProjectDetail({ project, tasks, activity, onBack }: Props) {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="panel p-4">
-      <div className="text-xs text-[var(--muted)]">{label}</div>
-      <div className="mt-2 text-2xl font-semibold">{value}</div>
+      <div className="text-xs uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="mt-2 text-2xl font-semibold num">{value}</div>
     </div>
   );
 }
@@ -123,7 +124,7 @@ function ProjectActivityChart({
         <div className="text-sm text-[var(--muted)]">No completed work in this range.</div>
       ) : (
         <div className="space-y-2">
-          <div className="flex h-48 items-end gap-1 rounded-[var(--radius)] border border-[var(--line)] bg-black/10 p-3">
+          <div className="flex h-44 items-end gap-1 rounded-[var(--radius)] border border-[var(--line)] bg-white/[0.015] p-3">
             {bins.map((bin) => (
               <div
                 key={bin.start}
@@ -133,7 +134,7 @@ function ProjectActivityChart({
               />
             ))}
           </div>
-          <div className="flex justify-between text-[0.65rem] text-[var(--muted)]">
+          <div className="flex justify-between font-mono text-[0.65rem] text-[var(--muted)]" style={{ fontFamily: "var(--font-mono)" }}>
             <span>{formatRangeTime(start)}</span>
             <span>{formatRangeTime(now)}</span>
           </div>

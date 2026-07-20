@@ -265,17 +265,26 @@ def cmd_status(args):
 
 # ─── Project commands ────────────────────────────────────────────────────────
 
+def _detect_agents_md(project_path):
+    for candidate in ["AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"]:
+        path = os.path.join(project_path, candidate)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _validated_project_path(path):
+    abs_path = os.path.abspath(path)
+    if not os.path.isdir(abs_path):
+        raise ValueError(f"Project path does not exist or is not a directory: {path}")
+    return abs_path
+
+
 def cmd_project_add(args):
     conn = get_db()
-    agents_md = None
-    # Auto-detect AGENTS.md in project path
-    if os.path.isdir(args.path):
-        for candidate in ["AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"]:
-            p = os.path.join(args.path, candidate)
-            if os.path.isfile(p):
-                agents_md = p
-                break
-    proj = project_add(conn, args.name, os.path.abspath(args.path), agents_md_path=agents_md, pr_workflow=args.pr)
+    project_path = os.path.abspath(args.path)
+    agents_md = _detect_agents_md(project_path) if os.path.isdir(project_path) else None
+    proj = project_add(conn, args.name, project_path, agents_md_path=agents_md, pr_workflow=args.pr)
     print(f"Project '{proj['name']}' added (id={proj['id']})")
     if agents_md:
         print(f"  AGENTS.md: {agents_md}")
@@ -325,12 +334,38 @@ def cmd_project_rm(args):
 def cmd_project_update(args):
     conn = get_db()
     proj = _resolve_project(conn, args.name)
-    if args.pr == args.no_pr:
-        print("Specify exactly one of --pr or --no-pr.")
+
+    updates = {}
+    messages = []
+
+    if args.path:
+        try:
+            project_path = _validated_project_path(args.path)
+        except ValueError as e:
+            print(str(e))
+            conn.close()
+            sys.exit(1)
+        updates["path"] = project_path
+        updates["agents_md_path"] = _detect_agents_md(project_path)
+        messages.append(f"path: {project_path}")
+
+    if args.pr or args.no_pr:
+        if args.pr == args.no_pr:
+            print("Specify only one of --pr or --no-pr.")
+            conn.close()
+            sys.exit(1)
+        updates["pr_workflow"] = 1 if args.pr else 0
+        messages.append(f"PR workflow: {'enabled' if args.pr else 'disabled'}")
+
+    if not updates:
+        print("Specify at least one setting to update: --path, --pr, or --no-pr.")
         conn.close()
         sys.exit(1)
-    updated = project_update(conn, proj["id"], pr_workflow=1 if args.pr else 0)
-    print(f"Project '{updated['name']}' PR workflow: {'enabled' if updated['pr_workflow'] else 'disabled'}")
+
+    updated = project_update(conn, proj["id"], **updates)
+    print(f"Project '{updated['name']}' updated.")
+    for message in messages:
+        print(f"  {message}")
     conn.close()
 
 # ─── Idea commands ───────────────────────────────────────────────────────────
@@ -1501,6 +1536,7 @@ def _build_parser():
     ps.set_defaults(func=cmd_project_show)
     pu = psub.add_parser("update", help="Update project settings")
     pu.add_argument("name")
+    pu.add_argument("--path", help="Update the registered filesystem path")
     pu.add_argument("--pr", action="store_true")
     pu.add_argument("--no-pr", action="store_true")
     pu.set_defaults(func=cmd_project_update)

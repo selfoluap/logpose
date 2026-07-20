@@ -32,6 +32,7 @@ lg status                         Show stats across all projects
 lg project add <name> <path>      Register a project (auto-detects AGENTS.md)
 lg project list                   List all projects
 lg project show <name>            Show project with its ideas and tasks
+lg project update <name> [--path path] [--pr|--no-pr]  Update project settings
 lg project rm <name>              Remove project and all its ideas/tasks
 
 lg idea add <project> <title> [-d desc] [-c 0-5]   Add an idea

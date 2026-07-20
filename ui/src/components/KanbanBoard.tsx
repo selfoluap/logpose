@@ -25,7 +25,7 @@ export function KanbanBoard({ tasks, projects }: Props) {
         <select
           value={projectId}
           onChange={(event) => setProjectId(event.target.value)}
-          className="panel bg-[var(--panel)] px-3 py-2 text-sm"
+          className="panel px-3 py-2 text-sm"
         >
           <option value="all">All projects</option>
           {projects.map((project) => (
@@ -42,7 +42,7 @@ export function KanbanBoard({ tasks, projects }: Props) {
           return (
             <div key={status.id} className="panel min-h-40 p-3">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-medium">{status.label}</h2>
+                <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{status.label}</h2>
                 <span className="badge">{columnTasks.length}</span>
               </div>
               <div className="space-y-2">

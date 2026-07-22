@@ -6,28 +6,37 @@ export type ModelCatalog = { providers: ModelProvider[] };
 export type UiSettings = { models: Record<string, string>; catalog: ModelCatalog };
 
 export const DEFAULT_UI_MODELS: Record<string, string> = {
-  refine: "opencode-go/deepseek-v4-flash",
-  plan: "openai/gpt-5.5",
-  review: "opencode-go/deepseek-v4-pro",
-  "1": "opencode-go/deepseek-v4-flash",
-  "2": "opencode-go/deepseek-v4-flash",
-  "3": "openai/glm-5.2",
-  "4": "openai/gpt-5.4",
-  "5": "openai/gpt-5.5"
+  refine: "aperture/deepseek-v4-flash",
+  plan: "openai-codex/gpt-5.5",
+  review: "aperture/deepseek-v4-pro",
+  "1": "aperture/deepseek-v4-flash",
+  "2": "aperture/deepseek-v4-flash",
+  "3": "aperture/glm-5.2",
+  "4": "openai-codex/gpt-5.4",
+  "5": "openai-codex/gpt-5.5"
 };
 
 export const DEFAULT_MODEL_CATALOG: ModelCatalog = {
   providers: [
     {
       name: "aperture",
-      baseUrl: "https://api.openai.com/v1",
+      baseUrl: "https://ai.tail1a19b7.ts.net/v1",
       models: [
-        "opencode-go/deepseek-v4-flash",
-        "opencode-go/deepseek-v4-pro",
-        "openai/glm-5.2",
-        "openai/gpt-5.4",
-        "openai/gpt-5.5"
+        "aperture/big-pickle",
+        "aperture/deepseek-v4-flash",
+        "aperture/deepseek-v4-flash-free",
+        "aperture/deepseek-v4-pro",
+        "aperture/glm-5.2",
+        "aperture/kimi-k2.7-code",
+        "aperture/mimo-v2.5-free",
+        "aperture/nemotron-3-ultra-free",
+        "aperture/north-mini-code-free"
       ]
+    },
+    {
+      name: "openai-codex",
+      baseUrl: "http://ai.tail1a19b7.ts.net/codex",
+      models: ["openai-codex/gpt-5.4", "openai-codex/gpt-5.5"]
     }
   ]
 };

@@ -10,7 +10,28 @@ describe("ui config", () => {
     const config = loadUiSettings(join(dir, "config.json"), join(dir, "model-catalog.json"));
 
     expect(Object.keys(config.models).sort()).toEqual(["1", "2", "3", "4", "5", "plan", "refine", "review"]);
-    expect(config.catalog.providers[0].models).toContain("openai/gpt-5.5");
+    expect(config.catalog.providers).toEqual([
+      {
+        name: "aperture",
+        baseUrl: "https://ai.tail1a19b7.ts.net/v1",
+        models: [
+          "aperture/big-pickle",
+          "aperture/deepseek-v4-flash",
+          "aperture/deepseek-v4-flash-free",
+          "aperture/deepseek-v4-pro",
+          "aperture/glm-5.2",
+          "aperture/kimi-k2.7-code",
+          "aperture/mimo-v2.5-free",
+          "aperture/nemotron-3-ultra-free",
+          "aperture/north-mini-code-free"
+        ]
+      },
+      {
+        name: "openai-codex",
+        baseUrl: "http://ai.tail1a19b7.ts.net/codex",
+        models: ["openai-codex/gpt-5.4", "openai-codex/gpt-5.5"]
+      }
+    ]);
   });
 
   it("saves mappings to config and explicit catalog separately", () => {

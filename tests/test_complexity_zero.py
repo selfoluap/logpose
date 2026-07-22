@@ -173,12 +173,12 @@ def test_pr_mode_does_not_treat_c0_as_default_three():
     assert cli._is_pr_mode(project, config, None)
 
 
-def test_c3_default_model_moves_to_glm_52():
+def test_c3_default_model_uses_aperture_glm_52():
     orig_load_config = config_mod.load_config
     try:
         config_mod.load_config = lambda: {"models": dict(config_mod.DEFAULT_CONFIG["models"])}
-        assert get_model_for_complexity(None) == "openai/glm-5.2"
-        assert get_model_for_complexity(3) == "openai/glm-5.2"
+        assert get_model_for_complexity(None) == "aperture/glm-5.2"
+        assert get_model_for_complexity(3) == "aperture/glm-5.2"
     finally:
         config_mod.load_config = orig_load_config
 
@@ -215,6 +215,6 @@ if __name__ == "__main__":
     test_c1_still_requires_build_log_to_mark_done()
     test_c0_build_is_refused()
     test_pr_mode_does_not_treat_c0_as_default_three()
-    test_c3_default_model_moves_to_glm_52()
+    test_c3_default_model_uses_aperture_glm_52()
     test_config_show_mentions_c0_bypass_and_c3_model()
     print("all tests OK")

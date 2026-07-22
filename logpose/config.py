@@ -17,14 +17,14 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_CONFIG = {
     "models": {
         "0": "logpose/direct-patch",
-        "refine": "opencode-go/deepseek-v4-flash",
-        "plan": "openai/gpt-5.5",
-        "review": "opencode-go/deepseek-v4-pro",
-        "1": "opencode-go/deepseek-v4-flash",
-        "2": "opencode-go/deepseek-v4-flash",
-        "3": "openai/glm-5.2",
-        "4": "openai/gpt-5.4",
-        "5": "openai/gpt-5.5",
+        "refine": "aperture/deepseek-v4-flash",
+        "plan": "openai-codex/gpt-5.5",
+        "review": "aperture/deepseek-v4-pro",
+        "1": "aperture/deepseek-v4-flash",
+        "2": "aperture/deepseek-v4-flash",
+        "3": "aperture/glm-5.2",
+        "4": "openai-codex/gpt-5.4",
+        "5": "openai-codex/gpt-5.5",
     },
     "sentry": {
         "org": None,
@@ -108,7 +108,7 @@ def get_model_for_complexity(score, override=None):
     if score is None:
         return models.get("3", DEFAULT_CONFIG["models"]["3"])
     score = max(1, min(5, score))
-    return models.get(str(score), DEFAULT_CONFIG["models"].get(str(score), "opencode-go/deepseek-v4-flash"))
+    return models.get(str(score), DEFAULT_CONFIG["models"].get(str(score), "aperture/deepseek-v4-flash"))
 
 
 def get_model_for_role(role, override=None):

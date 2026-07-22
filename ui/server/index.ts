@@ -4,14 +4,19 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_MODEL_CATALOG, DEFAULT_UI_MODELS, loadUiSettings, saveUiSettings } from "./config.js";
 import { mapActivity, mapBrain, mapBugs, mapIdeas, mapProjects, mapTasks, summarizeStatus } from "./data.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3737);
 const host = process.env.HOST ?? "0.0.0.0";
 const dbPath = path.join(os.homedir(), ".logpose", "tix.db");
+const configPath = path.join(os.homedir(), ".logpose", "config.json");
+const catalogPath = path.join(os.homedir(), ".logpose", "model-catalog.json");
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const logDir = path.join(os.homedir(), ".logpose", "logs");
+
+app.use(express.json({ limit: "64kb" }));
 
 function parseTime(value: unknown) {
   if (typeof value === "number") return value / 1000;
@@ -283,6 +288,30 @@ app.get("/api/bugs", (_req, res, next) => {
         )
       )
     );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/config", (_req, res, next) => {
+  try {
+    res.json(loadUiSettings(configPath, catalogPath));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/config", (req, res, next) => {
+  try {
+    res.json(saveUiSettings(configPath, catalogPath, req.body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/config/reset", (_req, res, next) => {
+  try {
+    res.json(saveUiSettings(configPath, catalogPath, { models: DEFAULT_UI_MODELS, catalog: DEFAULT_MODEL_CATALOG }));
   } catch (error) {
     next(error);
   }

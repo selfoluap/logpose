@@ -2,6 +2,7 @@
 
 import json
 import os
+from copy import deepcopy
 
 CONFIG_DIR = os.path.expanduser("~/.logpose")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
@@ -15,14 +16,14 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 #   - review: strong instruction following (checklist-based spec/quality checks)
 DEFAULT_CONFIG = {
     "models": {
-        "refine": "opencode-go/deepseek-v4-flash",
-        "plan": "openai/gpt-5.5",
-        "review": "opencode-go/deepseek-v4-pro",
-        "1": "opencode-go/deepseek-v4-flash",
-        "2": "opencode-go/deepseek-v4-flash",
-        "3": "openai/glm-5.2",
-        "4": "openai/gpt-5.4",
-        "5": "openai/gpt-5.5",
+        "refine": "aperture/deepseek-v4-flash",
+        "plan": "openai-codex/gpt-5.5",
+        "review": "aperture/deepseek-v4-pro",
+        "1": "aperture/deepseek-v4-flash",
+        "2": "aperture/deepseek-v4-flash",
+        "3": "aperture/glm-5.2",
+        "4": "openai-codex/gpt-5.4",
+        "5": "openai-codex/gpt-5.5",
     },
     "sentry": {
         "org": None,
@@ -44,11 +45,15 @@ def load_config():
     if os.path.isfile(CONFIG_PATH):
         with open(CONFIG_PATH, "r") as f:
             config = json.load(f)
-        # Migrate: add missing role keys with defaults
+        # Migrate: add missing model keys with defaults
         changed = False
-        for role in ("refine", "plan", "review"):
-            if role not in config.get("models", {}):
-                config["models"][role] = DEFAULT_CONFIG["models"][role]
+        config.setdefault("models", {})
+        if "0" in config["models"]:
+            del config["models"]["0"]
+            changed = True
+        for key, model in DEFAULT_CONFIG["models"].items():
+            if key not in config["models"]:
+                config["models"][key] = model
                 changed = True
         if "pr_workflow" not in config:
             config["pr_workflow"] = dict(DEFAULT_CONFIG["pr_workflow"])
@@ -76,7 +81,7 @@ def load_config():
         if changed:
             save_config(config)
         return config
-    config = dict(DEFAULT_CONFIG)
+    config = deepcopy(DEFAULT_CONFIG)
     os.makedirs(CONFIG_DIR, exist_ok=True)
     save_config(config)
     return config
@@ -105,7 +110,7 @@ def get_model_for_complexity(score, override=None):
     if score is None:
         return models.get("3", DEFAULT_CONFIG["models"]["3"])
     score = max(1, min(5, score))
-    return models.get(str(score), DEFAULT_CONFIG["models"].get(str(score), "opencode-go/deepseek-v4-flash"))
+    return models.get(str(score), DEFAULT_CONFIG["models"].get(str(score), "aperture/deepseek-v4-flash"))
 
 
 def get_model_for_role(role, override=None):
@@ -128,7 +133,7 @@ def get_model_for_role(role, override=None):
 
 def reset_config():
     """Reset config to defaults."""
-    save_config(dict(DEFAULT_CONFIG))
+    save_config(deepcopy(DEFAULT_CONFIG))
 
 
 # ─── Sentry integration ──────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ from io import StringIO
 from pathlib import Path
 import sys
 import tempfile
+import json
 
 from logpose import cli
 from logpose import db as db_mod
@@ -173,14 +174,38 @@ def test_pr_mode_does_not_treat_c0_as_default_three():
     assert cli._is_pr_mode(project, config, None)
 
 
-def test_c3_default_model_moves_to_glm_52():
+def test_c3_default_model_uses_aperture_glm_52():
     orig_load_config = config_mod.load_config
     try:
         config_mod.load_config = lambda: {"models": dict(config_mod.DEFAULT_CONFIG["models"])}
-        assert get_model_for_complexity(None) == "openai/glm-5.2"
-        assert get_model_for_complexity(3) == "openai/glm-5.2"
+        assert get_model_for_complexity(None) == "aperture/glm-5.2"
+        assert get_model_for_complexity(3) == "aperture/glm-5.2"
     finally:
         config_mod.load_config = orig_load_config
+
+
+def test_default_config_has_no_c0_model_mapping():
+    assert "0" not in config_mod.DEFAULT_CONFIG["models"]
+
+
+def test_load_config_removes_saved_c0_model_mapping():
+    with tempfile.TemporaryDirectory() as d:
+        config_path = Path(d) / "config.json"
+        config_path.write_text(json.dumps({"models": {"0": "logpose/direct-patch", "3": "custom/model"}}))
+        old_dir = config_mod.CONFIG_DIR
+        old_path = config_mod.CONFIG_PATH
+        try:
+            config_mod.CONFIG_DIR = d
+            config_mod.CONFIG_PATH = str(config_path)
+            config = config_mod.load_config()
+            saved = json.loads(config_path.read_text())
+        finally:
+            config_mod.CONFIG_DIR = old_dir
+            config_mod.CONFIG_PATH = old_path
+
+        assert "0" not in config["models"]
+        assert "0" not in saved["models"]
+        assert saved["models"]["3"] == "custom/model"
 
 
 def test_config_show_mentions_c0_bypass_and_c3_model():
@@ -215,6 +240,6 @@ if __name__ == "__main__":
     test_c1_still_requires_build_log_to_mark_done()
     test_c0_build_is_refused()
     test_pr_mode_does_not_treat_c0_as_default_three()
-    test_c3_default_model_moves_to_glm_52()
+    test_c3_default_model_uses_aperture_glm_52()
     test_config_show_mentions_c0_bypass_and_c3_model()
     print("all tests OK")

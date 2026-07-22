@@ -1,4 +1,4 @@
-import { Brain, KanbanSquare, LayoutDashboard, Lightbulb } from "lucide-react";
+import { Brain, KanbanSquare, LayoutDashboard, Lightbulb, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "./api/client";
 import { BrainList } from "./components/BrainList";
@@ -6,6 +6,7 @@ import { Dashboard } from "./components/Dashboard";
 import { IdeasList } from "./components/IdeasList";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { ProjectDetail } from "./components/ProjectDetail";
+import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import type { ActivityBucket, BrainIdea, Idea, Project, StatusSummary, Task } from "./types";
 
@@ -13,7 +14,8 @@ const views = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "tasks", label: "Tasks", icon: KanbanSquare },
   { id: "ideas", label: "Ideas", icon: Lightbulb },
-  { id: "brain", label: "Brain", icon: Brain }
+  { id: "brain", label: "Brain", icon: Brain },
+  { id: "settings", label: "Settings", icon: Settings }
 ] as const;
 
 export type View = (typeof views)[number]["id"];
@@ -89,6 +91,7 @@ export default function App() {
         {!error && view === "tasks" ? <KanbanBoard tasks={tasks} projects={projects} /> : null}
         {!error && view === "ideas" ? <IdeasList ideas={ideas} /> : null}
         {!error && view === "brain" ? <BrainList brain={brain} /> : null}
+        {!error && view === "settings" ? <SettingsPage /> : null}
       </main>
     </div>
   );

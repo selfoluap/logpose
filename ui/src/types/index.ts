@@ -88,7 +88,6 @@ export type Bug = {
 export type ProviderConfig = {
   name: string;
   baseUrl: string;
-  models: string[];
 };
 
 export type LogposeConfig = {

@@ -10,16 +10,19 @@ describe("SettingsPage", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("shows mappings as provider-backed dropdowns and saves edits", async () => {
+  it("loads dropdown models from providers and saves edits without cached model lists", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((url: string, init?: RequestInit) => {
       if (url === "/api/config" && !init) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
             models: { "0": "logpose/direct-patch", "1": "openai/gpt-5.4", "2": "openai/gpt-5.4", "3": "openai/gpt-5.4", "4": "openai/gpt-5.4", "5": "openai/gpt-5.5", refine: "openai/gpt-5.4", plan: "openai/gpt-5.5", review: "openai/gpt-5.4" },
-            providers: [{ name: "openai", baseUrl: "https://api.openai.com/v1", models: ["openai/gpt-5.4", "openai/gpt-5.5"] }]
+            providers: [{ name: "openai", baseUrl: "https://api.openai.com/v1" }]
           })
         } as Response);
+      }
+      if (url === "/api/provider-models") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(["openai/gpt-5.4", "openai/gpt-5.5"]) } as Response);
       }
       if (url === "/api/config" && init?.method === "PUT") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(String(init.body))) } as Response);
@@ -37,8 +40,10 @@ describe("SettingsPage", () => {
     expect(container.textContent).toContain("Complexity 0");
     expect(container.textContent).toContain("Review");
     expect(container.querySelectorAll("select").length).toBeGreaterThanOrEqual(9);
+    expect(fetchMock).toHaveBeenCalledWith("/api/provider-models", expect.objectContaining({ body: JSON.stringify({ baseUrl: "https://api.openai.com/v1" }) }));
 
     const planSelect = [...container.querySelectorAll<HTMLSelectElement>("select")].find((select) => select.getAttribute("aria-label") === "Plan model")!;
+    expect([...planSelect.options].map((option) => option.value)).toEqual(["openai/gpt-5.4", "openai/gpt-5.5"]);
     act(() => {
       planSelect.value = "openai/gpt-5.4";
       planSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -47,6 +52,35 @@ describe("SettingsPage", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/config", expect.objectContaining({ method: "PUT" }));
     expect((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body).toContain('"plan":"openai/gpt-5.4"');
+    expect((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body).not.toContain('"models":["openai/gpt-5.4"');
+
+    act(() => { root.unmount(); });
+    container.remove();
+  });
+
+  it("keeps selected model visible when provider model fetch fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/config" && !init) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            models: { "0": "logpose/direct-patch", "1": "openai/gpt-5.4", "2": "openai/gpt-5.4", "3": "openai/gpt-5.4", "4": "openai/gpt-5.4", "5": "openai/gpt-5.5", refine: "openai/gpt-5.4", plan: "openai/gpt-5.5", review: "openai/gpt-5.4" },
+            providers: [{ name: "openai", baseUrl: "https://api.openai.com/v1" }]
+          })
+        } as Response);
+      }
+      return Promise.resolve({ ok: false, text: () => Promise.resolve("provider down") } as Response);
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => { root.render(<SettingsPage />); });
+    await act(async () => {});
+
+    const planSelect = [...container.querySelectorAll<HTMLSelectElement>("select")].find((select) => select.getAttribute("aria-label") === "Plan model")!;
+    expect(container.textContent).toContain("provider down");
+    expect([...planSelect.options].map((option) => option.value)).toContain("openai/gpt-5.5");
 
     act(() => { root.unmount(); });
     container.remove();

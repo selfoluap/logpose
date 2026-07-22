@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-export type ProviderConfig = { name: string; baseUrl: string; models: string[] };
+export type ProviderConfig = { name: string; baseUrl: string };
 export type UiConfig = { models: Record<string, string>; providers: ProviderConfig[] };
 
 export const DEFAULT_UI_CONFIG: UiConfig = {
@@ -17,9 +17,9 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
     "5": "openai/gpt-5.5"
   },
   providers: [
-    { name: "logpose", baseUrl: "local", models: ["logpose/direct-patch"] },
-    { name: "opencode-go", baseUrl: "https://models.dev/api", models: ["opencode-go/deepseek-v4-flash", "opencode-go/deepseek-v4-pro"] },
-    { name: "openai", baseUrl: "https://api.openai.com/v1", models: ["openai/glm-5.2", "openai/gpt-5.4", "openai/gpt-5.5"] }
+    { name: "logpose", baseUrl: "local" },
+    { name: "opencode-go", baseUrl: "https://models.dev/api" },
+    { name: "openai", baseUrl: "https://api.openai.com/v1" }
   ]
 };
 
@@ -35,8 +35,7 @@ export function normalizeUiConfig(input: unknown): UiConfig {
         .filter((provider): provider is Record<string, unknown> => Boolean(provider))
         .map((provider) => ({
           name: String(provider.name ?? "").trim(),
-          baseUrl: String(provider.baseUrl ?? "").trim(),
-          models: Array.isArray(provider.models) ? provider.models.filter((model): model is string => typeof model === "string" && model.trim().length > 0) : []
+          baseUrl: String(provider.baseUrl ?? "").trim()
         }))
         .filter((provider) => provider.name && provider.baseUrl)
     : [];
@@ -56,11 +55,13 @@ export function saveUiConfig(configPath: string, config: UiConfig) {
   const safe = normalizeUiConfig(config);
   const current = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown> : {};
   mkdirSync(dirname(configPath), { recursive: true });
-  writeFileSync(configPath, `${JSON.stringify({ ...current, ...safe }, null, 2)}\n`);
+  const { apiKey: _apiKey, token: _token, secret: _secret, ...currentSafe } = current;
+  writeFileSync(configPath, `${JSON.stringify({ ...currentSafe, ...safe }, null, 2)}\n`);
   return safe;
 }
 
 export async function loadProviderModels(baseUrl: string) {
+  if (baseUrl === "local") return ["logpose/direct-patch"];
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/models`);
   if (!response.ok) throw new Error(await response.text());
   const payload = await response.json() as { data?: Array<{ id?: unknown }> } | string[];

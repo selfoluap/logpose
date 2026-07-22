@@ -36,9 +36,9 @@ DEFAULT_CONFIG = {
         "min_complexity": 3,
     },
     "providers": [
-        {"name": "logpose", "baseUrl": "local", "models": ["logpose/direct-patch"]},
-        {"name": "opencode-go", "baseUrl": "https://models.dev/api", "models": ["opencode-go/deepseek-v4-flash", "opencode-go/deepseek-v4-pro"]},
-        {"name": "openai", "baseUrl": "https://api.openai.com/v1", "models": ["openai/glm-5.2", "openai/gpt-5.4", "openai/gpt-5.5"]},
+        {"name": "logpose", "baseUrl": "local"},
+        {"name": "opencode-go", "baseUrl": "https://models.dev/api"},
+        {"name": "openai", "baseUrl": "https://api.openai.com/v1"},
     ],
 }
 
@@ -61,6 +61,18 @@ def load_config():
         if "providers" not in config:
             config["providers"] = deepcopy(DEFAULT_CONFIG["providers"])
             changed = True
+        else:
+            providers = []
+            for provider in config["providers"]:
+                if not isinstance(provider, dict):
+                    continue
+                name = str(provider.get("name", "")).strip()
+                base_url = str(provider.get("baseUrl", "")).strip()
+                if name and base_url:
+                    providers.append({"name": name, "baseUrl": base_url})
+            if providers != config["providers"]:
+                config["providers"] = providers or deepcopy(DEFAULT_CONFIG["providers"])
+                changed = True
         if "pr_workflow" not in config:
             config["pr_workflow"] = dict(DEFAULT_CONFIG["pr_workflow"])
             changed = True

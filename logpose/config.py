@@ -35,11 +35,6 @@ DEFAULT_CONFIG = {
         "auto_pr": True,
         "min_complexity": 3,
     },
-    "providers": [
-        {"name": "logpose", "baseUrl": "local"},
-        {"name": "opencode-go", "baseUrl": "https://models.dev/api"},
-        {"name": "openai", "baseUrl": "https://api.openai.com/v1"},
-    ],
 }
 
 
@@ -51,27 +46,12 @@ def load_config():
     if os.path.isfile(CONFIG_PATH):
         with open(CONFIG_PATH, "r") as f:
             config = json.load(f)
-        # Migrate: add missing model/provider keys with defaults
+        # Migrate: add missing model keys with defaults
         changed = False
         config.setdefault("models", {})
         for key, model in DEFAULT_CONFIG["models"].items():
             if key not in config["models"]:
                 config["models"][key] = model
-                changed = True
-        if "providers" not in config:
-            config["providers"] = deepcopy(DEFAULT_CONFIG["providers"])
-            changed = True
-        else:
-            providers = []
-            for provider in config["providers"]:
-                if not isinstance(provider, dict):
-                    continue
-                name = str(provider.get("name", "")).strip()
-                base_url = str(provider.get("baseUrl", "")).strip()
-                if name and base_url:
-                    providers.append({"name": name, "baseUrl": base_url})
-            if providers != config["providers"]:
-                config["providers"] = providers or deepcopy(DEFAULT_CONFIG["providers"])
                 changed = True
         if "pr_workflow" not in config:
             config["pr_workflow"] = dict(DEFAULT_CONFIG["pr_workflow"])

@@ -75,6 +75,10 @@ def test_get_model_for_complexity_none_with_override():
         config_mod.load_config = orig_load_config
 
 
+def test_default_config_keeps_provider_catalog_out_of_active_config():
+    assert "providers" not in config_mod.DEFAULT_CONFIG
+
+
 # ─── CLI argparse acceptance tests ────────────────────────────────────────────
 
 def test_argparse_accepts_model_on_plan():

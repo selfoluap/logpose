@@ -2,52 +2,64 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_UI_CONFIG, loadUiConfig, saveUiConfig } from "./config.js";
+import { DEFAULT_MODEL_CATALOG, DEFAULT_UI_MODELS, loadUiSettings, saveUiSettings } from "./config.js";
 
 describe("ui config", () => {
-  it("loads default providers and mappings for roles plus complexity 0-5", () => {
-    const config = loadUiConfig(join(mkdtempSync(join(tmpdir(), "logpose-ui-")), "config.json"));
+  it("loads default catalog and mappings for roles plus complexity 1-5", () => {
+    const dir = mkdtempSync(join(tmpdir(), "logpose-ui-"));
+    const config = loadUiSettings(join(dir, "config.json"), join(dir, "model-catalog.json"));
 
-    expect(Object.keys(config.models).sort()).toEqual(["0", "1", "2", "3", "4", "5", "plan", "refine", "review"]);
-    expect(config.providers.map((provider) => provider.name)).toContain("openai");
-    expect(config.providers.find((provider) => provider.name === "openai")).toEqual({ name: "openai", baseUrl: "https://api.openai.com/v1" });
+    expect(Object.keys(config.models).sort()).toEqual(["1", "2", "3", "4", "5", "plan", "refine", "review"]);
+    expect(config.catalog.providers[0].models).toContain("openai/gpt-5.5");
   });
 
-  it("saves provider base urls without cached models or secrets", () => {
-    const file = join(mkdtempSync(join(tmpdir(), "logpose-ui-")), "config.json");
+  it("saves mappings to config and explicit catalog separately", () => {
+    const dir = mkdtempSync(join(tmpdir(), "logpose-ui-"));
+    const configPath = join(dir, "config.json");
+    const catalogPath = join(dir, "model-catalog.json");
 
-    saveUiConfig(file, {
-      ...DEFAULT_UI_CONFIG,
-      providers: [{ name: "local", baseUrl: "http://localhost:11434/v1", models: ["local/llama"], apiKey: "provider-nope" }],
-      models: { ...DEFAULT_UI_CONFIG.models, plan: "local/llama" },
+    saveUiSettings(configPath, catalogPath, {
+      models: { ...DEFAULT_UI_MODELS, plan: "local/llama" },
+      catalog: { providers: [{ name: "local", baseUrl: "http://localhost:11434/v1", models: ["local/llama"], apiKey: "provider-nope" } as any] },
       apiKey: "nope"
     } as any);
 
-    const raw = readFileSync(file, "utf8");
-    expect(raw).toContain("http://localhost:11434/v1");
+    const raw = readFileSync(configPath, "utf8");
+    const catalogRaw = readFileSync(catalogPath, "utf8");
     expect(raw).toContain("local/llama");
-    expect(raw).not.toContain('"models": [\n      "local/llama"');
+    expect(raw).not.toContain('"providers"');
+    expect(catalogRaw).toContain("http://localhost:11434/v1");
+    expect(catalogRaw).toContain('"models"');
     expect(raw).not.toContain("provider-nope");
     expect(raw).not.toContain("apiKey");
     expect(raw).not.toContain("nope");
   });
 
   it("preserves unrelated config keys while dropping old provider model caches", () => {
-    const file = join(mkdtempSync(join(tmpdir(), "logpose-ui-")), "config.json");
-    writeFileSync(file, JSON.stringify({
+    const dir = mkdtempSync(join(tmpdir(), "logpose-ui-"));
+    const configPath = join(dir, "config.json");
+    const catalogPath = join(dir, "model-catalog.json");
+    writeFileSync(configPath, JSON.stringify({
       sentry: { org: "acme" },
       providers: [{ name: "old", baseUrl: "https://old.example/v1", models: ["old/model"] }]
     }));
 
-    saveUiConfig(file, {
-      ...DEFAULT_UI_CONFIG,
-      providers: [{ name: "new", baseUrl: "https://new.example/v1" }]
+    saveUiSettings(configPath, catalogPath, {
+      models: DEFAULT_UI_MODELS,
+      catalog: { providers: [{ name: "new", baseUrl: "https://new.example/v1", models: ["new/model"] }] }
     });
 
-    const raw = readFileSync(file, "utf8");
+    const raw = readFileSync(configPath, "utf8");
     expect(raw).toContain('"sentry"');
     expect(raw).toContain("acme");
-    expect(raw).toContain("https://new.example/v1");
+    expect(raw).not.toContain('"providers"');
     expect(raw).not.toContain("old/model");
+    expect(readFileSync(catalogPath, "utf8")).toContain("new/model");
+  });
+
+  it("falls back to default catalog when catalog file is absent", () => {
+    const dir = mkdtempSync(join(tmpdir(), "logpose-ui-"));
+
+    expect(loadUiSettings(join(dir, "config.json"), join(dir, "model-catalog.json")).catalog).toEqual(DEFAULT_MODEL_CATALOG);
   });
 });

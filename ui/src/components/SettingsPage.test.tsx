@@ -10,19 +10,16 @@ describe("SettingsPage", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("loads dropdown models from providers and saves edits without cached model lists", async () => {
+  it("loads dropdown models from catalog and saves catalog edits", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((url: string, init?: RequestInit) => {
       if (url === "/api/config" && !init) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
-            models: { "0": "logpose/direct-patch", "1": "openai/gpt-5.4", "2": "openai/gpt-5.4", "3": "openai/gpt-5.4", "4": "openai/gpt-5.4", "5": "openai/gpt-5.5", refine: "openai/gpt-5.4", plan: "openai/gpt-5.5", review: "openai/gpt-5.4" },
-            providers: [{ name: "openai", baseUrl: "https://api.openai.com/v1" }]
+            models: { "1": "openai/gpt-5.4", "2": "openai/gpt-5.4", "3": "openai/gpt-5.4", "4": "openai/gpt-5.4", "5": "openai/gpt-5.5", refine: "openai/gpt-5.4", plan: "openai/gpt-5.5", review: "openai/gpt-5.4" },
+            catalog: { providers: [{ name: "openai", baseUrl: "https://api.openai.com/v1", models: ["openai/gpt-5.4", "openai/gpt-5.5"] }] }
           })
         } as Response);
-      }
-      if (url === "/api/provider-models") {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(["openai/gpt-5.4", "openai/gpt-5.5"]) } as Response);
       }
       if (url === "/api/config" && init?.method === "PUT") {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(String(init.body))) } as Response);
@@ -37,10 +34,10 @@ describe("SettingsPage", () => {
     await act(async () => {});
 
     expect(container.textContent).toContain("Model mappings");
-    expect(container.textContent).toContain("Complexity 0");
+    expect(container.textContent).toContain("Complexity 0: Hermes direct mechanical patch only");
     expect(container.textContent).toContain("Review");
-    expect(container.querySelectorAll("select").length).toBeGreaterThanOrEqual(9);
-    expect(fetchMock).toHaveBeenCalledWith("/api/provider-models", expect.objectContaining({ body: JSON.stringify({ baseUrl: "https://api.openai.com/v1" }) }));
+    expect(container.querySelectorAll("select").length).toBe(16);
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/provider-models", expect.anything());
 
     const planSelect = [...container.querySelectorAll<HTMLSelectElement>("select")].find((select) => select.getAttribute("aria-label") === "Plan model")!;
     expect([...planSelect.options].map((option) => option.value)).toEqual(["openai/gpt-5.4", "openai/gpt-5.5"]);
@@ -52,24 +49,24 @@ describe("SettingsPage", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/config", expect.objectContaining({ method: "PUT" }));
     expect((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body).toContain('"plan":"openai/gpt-5.4"');
-    expect((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body).not.toContain('"models":["openai/gpt-5.4"');
+    expect((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body).toContain('"models":["openai/gpt-5.4","openai/gpt-5.5"');
 
     act(() => { root.unmount(); });
     container.remove();
   });
 
-  it("keeps selected model visible when provider model fetch fails", async () => {
+  it("keeps selected model visible when it is missing from catalog", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((url: string, init?: RequestInit) => {
       if (url === "/api/config" && !init) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
-            models: { "0": "logpose/direct-patch", "1": "openai/gpt-5.4", "2": "openai/gpt-5.4", "3": "openai/gpt-5.4", "4": "openai/gpt-5.4", "5": "openai/gpt-5.5", refine: "openai/gpt-5.4", plan: "openai/gpt-5.5", review: "openai/gpt-5.4" },
-            providers: [{ name: "openai", baseUrl: "https://api.openai.com/v1" }]
+            models: { "1": "openai/gpt-5.4", "2": "openai/gpt-5.4", "3": "openai/gpt-5.4", "4": "openai/gpt-5.4", "5": "openai/gpt-5.5", refine: "openai/gpt-5.4", plan: "openai/gpt-5.5", review: "openai/gpt-5.4" },
+            catalog: { providers: [{ name: "openai", baseUrl: "https://api.openai.com/v1", models: ["openai/gpt-5.4"] }] }
           })
         } as Response);
       }
-      return Promise.resolve({ ok: false, text: () => Promise.resolve("provider down") } as Response);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
     });
     const container = document.createElement("div");
     document.body.append(container);
@@ -79,7 +76,6 @@ describe("SettingsPage", () => {
     await act(async () => {});
 
     const planSelect = [...container.querySelectorAll<HTMLSelectElement>("select")].find((select) => select.getAttribute("aria-label") === "Plan model")!;
-    expect(container.textContent).toContain("provider down");
     expect([...planSelect.options].map((option) => option.value)).toContain("openai/gpt-5.5");
 
     act(() => { root.unmount(); });

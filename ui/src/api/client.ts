@@ -34,6 +34,5 @@ export const api = {
   bugs: () => getJson<Bug[]>("/api/bugs"),
   config: () => getJson<LogposeConfig>("/api/config"),
   saveConfig: (config: LogposeConfig) => sendJson<LogposeConfig>("/api/config", "PUT", config),
-  resetConfig: () => sendJson<LogposeConfig>("/api/config/reset", "POST"),
-  providerModels: (baseUrl: string) => sendJson<string[]>("/api/provider-models", "POST", { baseUrl })
+  resetConfig: () => sendJson<LogposeConfig>("/api/config/reset", "POST")
 };

@@ -4,14 +4,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_UI_CONFIG, loadProviderModels, loadUiConfig, saveUiConfig } from "./config.js";
 import { mapActivity, mapBrain, mapBugs, mapIdeas, mapProjects, mapTasks, summarizeStatus } from "./data.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3737);
 const host = process.env.HOST ?? "0.0.0.0";
 const dbPath = path.join(os.homedir(), ".logpose", "tix.db");
+const configPath = path.join(os.homedir(), ".logpose", "config.json");
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const logDir = path.join(os.homedir(), ".logpose", "logs");
+
+app.use(express.json({ limit: "64kb" }));
 
 function parseTime(value: unknown) {
   if (typeof value === "number") return value / 1000;
@@ -283,6 +287,39 @@ app.get("/api/bugs", (_req, res, next) => {
         )
       )
     );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/config", (_req, res, next) => {
+  try {
+    res.json(loadUiConfig(configPath));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/config", (req, res, next) => {
+  try {
+    res.json(saveUiConfig(configPath, req.body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/config/reset", (_req, res, next) => {
+  try {
+    res.json(saveUiConfig(configPath, DEFAULT_UI_CONFIG));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/provider-models", async (req, res, next) => {
+  try {
+    if (typeof req.body?.baseUrl !== "string" || !req.body.baseUrl) throw new Error("Provider base URL is required");
+    res.json(await loadProviderModels(req.body.baseUrl));
   } catch (error) {
     next(error);
   }

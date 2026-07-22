@@ -84,3 +84,14 @@ export type Bug = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type ProviderConfig = {
+  name: string;
+  baseUrl: string;
+  models: string[];
+};
+
+export type LogposeConfig = {
+  models: Record<string, string>;
+  providers: ProviderConfig[];
+};

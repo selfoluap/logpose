@@ -2,6 +2,7 @@
 
 import json
 import os
+from copy import deepcopy
 
 CONFIG_DIR = os.path.expanduser("~/.logpose")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
@@ -15,6 +16,7 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 #   - review: strong instruction following (checklist-based spec/quality checks)
 DEFAULT_CONFIG = {
     "models": {
+        "0": "logpose/direct-patch",
         "refine": "opencode-go/deepseek-v4-flash",
         "plan": "openai/gpt-5.5",
         "review": "opencode-go/deepseek-v4-pro",
@@ -33,6 +35,11 @@ DEFAULT_CONFIG = {
         "auto_pr": True,
         "min_complexity": 3,
     },
+    "providers": [
+        {"name": "logpose", "baseUrl": "local", "models": ["logpose/direct-patch"]},
+        {"name": "opencode-go", "baseUrl": "https://models.dev/api", "models": ["opencode-go/deepseek-v4-flash", "opencode-go/deepseek-v4-pro"]},
+        {"name": "openai", "baseUrl": "https://api.openai.com/v1", "models": ["openai/glm-5.2", "openai/gpt-5.4", "openai/gpt-5.5"]},
+    ],
 }
 
 
@@ -44,12 +51,16 @@ def load_config():
     if os.path.isfile(CONFIG_PATH):
         with open(CONFIG_PATH, "r") as f:
             config = json.load(f)
-        # Migrate: add missing role keys with defaults
+        # Migrate: add missing model/provider keys with defaults
         changed = False
-        for role in ("refine", "plan", "review"):
-            if role not in config.get("models", {}):
-                config["models"][role] = DEFAULT_CONFIG["models"][role]
+        config.setdefault("models", {})
+        for key, model in DEFAULT_CONFIG["models"].items():
+            if key not in config["models"]:
+                config["models"][key] = model
                 changed = True
+        if "providers" not in config:
+            config["providers"] = deepcopy(DEFAULT_CONFIG["providers"])
+            changed = True
         if "pr_workflow" not in config:
             config["pr_workflow"] = dict(DEFAULT_CONFIG["pr_workflow"])
             changed = True
@@ -76,7 +87,7 @@ def load_config():
         if changed:
             save_config(config)
         return config
-    config = dict(DEFAULT_CONFIG)
+    config = deepcopy(DEFAULT_CONFIG)
     os.makedirs(CONFIG_DIR, exist_ok=True)
     save_config(config)
     return config
@@ -128,7 +139,7 @@ def get_model_for_role(role, override=None):
 
 def reset_config():
     """Reset config to defaults."""
-    save_config(dict(DEFAULT_CONFIG))
+    save_config(deepcopy(DEFAULT_CONFIG))
 
 
 # ─── Sentry integration ──────────────────────────────────────────────────────

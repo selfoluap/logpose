@@ -78,7 +78,7 @@ export function saveUiSettings(configPath: string, catalogPath: string, settings
   const current = existsSync(configPath) ? JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown> : {};
   mkdirSync(dirname(configPath), { recursive: true });
   mkdirSync(dirname(catalogPath), { recursive: true });
-  const { providers: _providers, apiKey: _apiKey, token: _token, secret: _secret, ...currentSafe } = current;
+  const { providers: _providers, ...currentSafe } = current;
   writeFileSync(configPath, `${JSON.stringify({ ...currentSafe, models: normalizeUiModels(settings) }, null, 2)}\n`);
   writeFileSync(catalogPath, `${JSON.stringify(normalizeCatalog(settings.catalog), null, 2)}\n`);
   return loadUiSettings(configPath, catalogPath);

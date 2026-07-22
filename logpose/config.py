@@ -16,7 +16,6 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 #   - review: strong instruction following (checklist-based spec/quality checks)
 DEFAULT_CONFIG = {
     "models": {
-        "0": "logpose/direct-patch",
         "refine": "aperture/deepseek-v4-flash",
         "plan": "openai-codex/gpt-5.5",
         "review": "aperture/deepseek-v4-pro",
@@ -49,6 +48,9 @@ def load_config():
         # Migrate: add missing model keys with defaults
         changed = False
         config.setdefault("models", {})
+        if "0" in config["models"]:
+            del config["models"]["0"]
+            changed = True
         for key, model in DEFAULT_CONFIG["models"].items():
             if key not in config["models"]:
                 config["models"][key] = model

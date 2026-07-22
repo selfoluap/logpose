@@ -54,6 +54,8 @@ describe("ui config", () => {
     expect(raw).not.toContain("provider-nope");
     expect(raw).not.toContain("apiKey");
     expect(raw).not.toContain("nope");
+    expect(catalogRaw).not.toContain("apiKey");
+    expect(catalogRaw).not.toContain("provider-nope");
   });
 
   it("preserves unrelated config keys while dropping old provider model caches", () => {
@@ -76,6 +78,25 @@ describe("ui config", () => {
     expect(raw).not.toContain('"providers"');
     expect(raw).not.toContain("old/model");
     expect(readFileSync(catalogPath, "utf8")).toContain("new/model");
+  });
+
+  it("preserves unrelated secret-named config keys", () => {
+    const dir = mkdtempSync(join(tmpdir(), "logpose-ui-"));
+    const configPath = join(dir, "config.json");
+    const catalogPath = join(dir, "model-catalog.json");
+    writeFileSync(configPath, JSON.stringify({ apiKey: "keep-api", token: "keep-token", secret: "keep-secret" }));
+
+    saveUiSettings(configPath, catalogPath, {
+      models: DEFAULT_UI_MODELS,
+      catalog: { providers: [{ name: "new", baseUrl: "https://new.example/v1", models: ["new/model"], token: "drop-provider-token" } as any] }
+    });
+
+    const raw = readFileSync(configPath, "utf8");
+    const catalogRaw = readFileSync(catalogPath, "utf8");
+    expect(raw).toContain("keep-api");
+    expect(raw).toContain("keep-token");
+    expect(raw).toContain("keep-secret");
+    expect(catalogRaw).not.toContain("drop-provider-token");
   });
 
   it("falls back to default catalog when catalog file is absent", () => {

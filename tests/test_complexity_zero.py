@@ -6,6 +6,7 @@ from io import StringIO
 from pathlib import Path
 import sys
 import tempfile
+import json
 
 from logpose import cli
 from logpose import db as db_mod
@@ -181,6 +182,30 @@ def test_c3_default_model_uses_aperture_glm_52():
         assert get_model_for_complexity(3) == "aperture/glm-5.2"
     finally:
         config_mod.load_config = orig_load_config
+
+
+def test_default_config_has_no_c0_model_mapping():
+    assert "0" not in config_mod.DEFAULT_CONFIG["models"]
+
+
+def test_load_config_removes_saved_c0_model_mapping():
+    with tempfile.TemporaryDirectory() as d:
+        config_path = Path(d) / "config.json"
+        config_path.write_text(json.dumps({"models": {"0": "logpose/direct-patch", "3": "custom/model"}}))
+        old_dir = config_mod.CONFIG_DIR
+        old_path = config_mod.CONFIG_PATH
+        try:
+            config_mod.CONFIG_DIR = d
+            config_mod.CONFIG_PATH = str(config_path)
+            config = config_mod.load_config()
+            saved = json.loads(config_path.read_text())
+        finally:
+            config_mod.CONFIG_DIR = old_dir
+            config_mod.CONFIG_PATH = old_path
+
+        assert "0" not in config["models"]
+        assert "0" not in saved["models"]
+        assert saved["models"]["3"] == "custom/model"
 
 
 def test_config_show_mentions_c0_bypass_and_c3_model():
